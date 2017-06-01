@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes how to build an interpreter for the Brainfuck language, which we shall call _Brainfunc_, using Haskell. It describes the components of the interpreter and also provides examples of those components. The goals of this document are to 1) assist readers to build a small program in Haskell and 2) expose readers to design considerations in functional programming.
+This document describes how to build an interpreter for the Brainfuck language using Haskell. We shall call the interpreter _Brainfunc_. This document describes the components of the interpreter and also provides examples of those components. The goals of this document are to 1) assist readers to build a small program in Haskell and 2) expose readers to design considerations in functional programming.
 
 ## Contents
 
@@ -16,40 +16,41 @@ This document describes how to build an interpreter for the Brainfuck language, 
 * [Building a Brainfuck Interpreter](#building-a-brainfuck-interpreter)
 * [Completing Brainfunc](#completing-brainfunc)
 * [Extending Brainfunc](#extending-brainfunc)
-* [Conclusion](#conclusion)
 * [Worked Examples](#worked-examples)
 
 ## How to Use this Material
 
-This material consists of two parts: descriptions of the functions that comprise Brainfunc, and example implementations of those functions. Each section in the first part of the document provides a brief overview of the concepts that will be covered in that section, then describes the functionality required to implement those concepts. The functions are presented in an approximate order of their complexity, therefore it is suggested that you work through them in the presented order. In each case, first write down the type of the function, then address the base cases (where certain input values directly correspond to certain output values), then complete the implementation.
+This material consists of two parts: descriptions of the functions that comprise Brainfunc, and example implementations of those functions. Each section in the first part of the document provides a brief overview of the concepts that will be covered in that section, then describes the functionality required to implement those concepts. The functions are presented in approximate order of their complexity, therefore it is suggested that you work through them in the presented order. In each case, first write down the type of the function, then address the base cases (where certain input values directly correspond to certain output values), then complete the implementation. Ensure your function has a defined result for all input values.
 
-Although worked examples are presented in the second part of this document, it is recommended to defer looking at them for as long as possible (ideally until after you have completed your interpreter). If stuck, move on to the next function and come back to the skipped function before moving to the next section (no function's implementation depends on another function from the same section). Also discuss the functions and their implementation with fellow Haskellers as an alternative to referring to the worked examples. The motivation for this suggestion is that the process of writing Haskell code involves exploring the structure of types and the relationships between them, which is somewhat undermined by referring to complete examples. Often by 'trying everything' you will not only improve your understanding of types and functions but also stumble across the answer and can work back from there.
+Although worked examples are presented in the second part of this document, it is recommended to defer looking at them for as long as possible (ideally until after you have completed your interpreter). If stuck, move on to the next function and come back to the skipped function before moving to the next section (no function's implementation depends on another function in the same section). Also discuss the functions and their implementation with fellow Haskellers as an alternative to referring to the worked examples. The motivation for this suggestion is that the process of writing Haskell code involves exploring the structure of types and the relationships between them, which is somewhat undermined by referring to complete examples. Often by 'trying everything' you will not only improve your understanding of types and functions but also stumble across the answer and can work back from there.
+
+If you find that you have no use for the worked examples, it may still be worth viewing them since each is accompanied by a short discussion about how the component was designed and what implications that design has for the structure of the program.
 
 ## Brainfuck and Brainfunc
 
-In 1936 Alan Turing described a model of effective computability that has since become known as the _Turing Machine_. This work was part of a larger research effort that demonstrated that a function is computable if there exists an algorithm that produces the same output as the function if given the same input. The Turing Machine is a model for constructing algorithms, which it achieves using the following:
+In 1936, Alan Turing described a model of effective computability that has since become known as the _Turing Machine_. This work was part of a larger research effort that demonstrated that a function is computable if there exists an algorithm that produces the same output as the function for all of the function's inputs. The Turing Machine is a model for constructing algorithms, which it achieves using the following:
 
 * An infinite _tape_ that consists of discrete _cells_ that contain symbols.
 * A _head_ that can move between cells and read from or write symbols to them.
 * A _state register_ that stores the state of the Machine.
 * A _table_ that consists of a finite number of instructions.
 
-The Turing Machine informed the development of a conceptual architecture for computing machines, now known as the _von Neumann Architecture_ (after John von Neumann), on which all modern general purpose computers are based. (Very) Broadly, the table corresponds to stored programs, the state register to the program's runtime, the tape to computer memory and the head to the central processing unit.
+The Turing Machine informed the development of a conceptual architecture for computing machines, now known as the _von Neumann Architecture_ (after John von Neumann), on which all modern general purpose computers are based. Broadly, the Machine's table corresponds to stored programs, the state register to the program runtime, the tape to computer memory and the head to the central processing unit.
 
-In 1964 Corrado Böhm developed the P'' programming language to describe a family of Turing Machine variants. In 1992 Urban Muller adapted and extended P'' to incorporate input and output operations and named the resulting language _Brainfuck_. The Brainfuck language defines a set of instructions that can be performed on a conceptual tape, in which each cell contains an integer value, by a conceptual head:
+In 1964, Corrado Böhm developed the P'' programming language to describe a subset of the variants of the Turing Machine model. In 1992, Urban Müller adapted and extended P'' to incorporate input and output operations and named the resultant language _Brainfuck_. The Brainfuck language defines a set of instructions that can be performed on a conceptual tape, in which each cell contains an integer value, by a conceptual head:
 
 * `+`: Increments the value in the cell under the head.
 * `-`: Decrements the value in the cell under the head.
 * `>`: Moves the head to the next cell.
 * `<`: Moves the head to the previous cell.
-* `[`: Denotes the beginning of a loop. If the value under the head is zero, then the instructions within the loop are skipped. The instruction does not affect the tape.
-* `]`: Denotes the end of a loop. If the value under the head is non-zero, then the instructions within the loop it closes are repeated. The instruction does not affect the tape.
+* `[`: Denotes the beginning of a loop. If the value in the cell under the head is zero, then the instructions within the loop are skipped. The instruction does not affect the tape.
+* `]`: Denotes the end of a loop. If the value in the cell under the head is non-zero, then the instructions within the loop it closes are repeated. The instruction does not affect the tape.
 * `.`: Reads a value from the cell under the head and prints it to the terminal.
 * `,`: Writes a value entered by the user at the terminal to the cell under the head.
 
 Interpreters of the Brainfuck language may vary in terms of the number of cells on the tape and the maximum and minimum values that a cell can contain. In the most liberal interpretation, the tape is infinite (finite only in memory) and each cell can contain any integer value.
 
-In 1932, prior to the discovery of the Turing Machine, Alonso Church discovered the _Lambda Calculus_. Lambda Calculus consists of three components: terms, abstractions, and expressions in which an abstraction is applied to a term. When first describing the Turing Machine, Turing demonstrated that the Machine and Lambda Calculus are equivalent. However, the two models begat very different paradigms of programming: the instruction-oriented Turing Machine influenced the creation of languages that consist of instructions that modify shared state - the imperative paradigm - whereas the expression-oriented Lambda Calculus enabled the creation of languages that define programs as a single expression - the functional paradigm. The purpose of this material is to guide you to create an interpreter for Brainfuck, an imperative language, in Haskell, a functional language. It is a brain<i>functional</i> interpreter. _Brainfunc_, if you will.
+In 1932, prior to the discovery of the Turing Machine, Alonso Church discovered the _Lambda Calculus_. Lambda Calculus consists of three components: terms, abstractions, and expressions in which an abstraction is applied to a term. When first describing the Turing Machine, Turing demonstrated that the Machine and Lambda Calculus are equivalent. However, the two models begat very different paradigms of programming: the instruction-oriented Turing Machine influenced the creation of languages that consist of instructions that modify shared state - the imperative paradigm - whereas the expression-oriented Lambda Calculus enabled the creation of languages that define programs as expressions - the functional paradigm. The purpose of this material is to guide you to create an interpreter for Brainfuck, an imperative language, in Haskell, a functional language. It is a brain<i>functional</i> interpreter. _Brainfunc_, if you will.
 
 ## Preliminaries
 
@@ -65,7 +66,7 @@ The `List` type has the following structure:
 data [a] = [] | a : [a]
 ```
 
-Thus a `List` value is either `[]`, meaning that it is empty, or it has a 'head' element `a` followed by a 'tail' `[a]`, which is another list. In the latter case, we say `a` is 'cons'ed onto `[a]`. The type variable `a` indicates that a list can be created for any type, with the constraint that the list only contains values of that type. The following are all `List` values:
+Thus a `List` value is either `[]`, meaning that it is empty, or it has a 'head' element `a` followed by a 'tail' `[a]`, which is another list. In the latter case, we say `a` is 'cons'ed onto `[a]` by the 'cons' operator `:`. The type variable `a` indicates that a list can be created for any type, with the constraint that the list only contains values of that type. The following are all `List` values:
 
 ```
 2:1:[]         :: [Integer] -- 2:1:[] can be expressed as [1,2]
@@ -141,7 +142,7 @@ Haskell contains an `error` function that enables the execution of a program to 
 
 ### Defining Zipper
 
-`List` is defined as a value followed by a `List` of values. We can exploit this structure to move rightwards through a `List` value using recursion. However, the structure of `List` is too limited to allow us to move leftwards through its elements. We require a `List` that has a 'tail' in both the left and right directions. This is `Zipper`. The `Zipper` type has the following structure:
+`List` is defined as a value followed by a `List` of values. We can exploit this structure to move rightwards through a `List` value using recursion. However, the structure of `List` is too limited to allow us to move leftwards through its elements. We require a `List` that has a 'tail' in both the left and right directions. This is the motivation for the `Zipper` type, which has the following structure:
 
 > data Zipper a = Zip | Zipper [a] a [a]
 
@@ -161,13 +162,13 @@ next (Zipper [3,2,1] 4 [5,6,7]) = Zipper [4,3,2,1] 5 [6,7]
 prev (Zipper [3,2,1] 4 [5,6,7]) = Zipper [2,1] 3 [4,5,6,7]
 ```
 
-`Zipper` enables us to move backwards and forwards through a sequence of values.
+Thus `Zipper` enables us to move backwards and forwards through a sequence of values.
 
 ### Required Functions
 
 #### Overview
 
-With a definition of `Zipper`, we can define various functions that allow us to modify a value of type `Zipper a`. There are many functions that are useful for manipulating `Zipper` values, but only the following functions are required to create Brainfunc:
+With a definition of `Zipper`, we can define various functions that allow us to modify values of that type. There are many functions that are useful for manipulating `Zipper` values, but only the following functions are required to create Brainfunc:
 
 * `zipper`: Allows us to create a `Zipper` from a single value.
 * `zipperFromList`: Allows us to create a `Zipper` from a `List`.
@@ -192,7 +193,7 @@ zipper (Just [1]) == Zipper [] (Just [1]) []
 
 #### `zipperFromList`
 
-Implement the `zipperFromList` function, which returns a `Zipper` representation of the argument `List`.
+Implement the `zipperFromList` function, which returns a `Zipper` representation of the argument `List`. Examples:
 
 ```
 zipperFromList [1,2,3,4,5] == Zipper [] 1 [2,3,4,5]
@@ -212,7 +213,7 @@ getCursor Zip                        == Nothing
 
 #### `setCursor`
 
-Implement the `setCursor` function, which replaces the cursor of a given `Zipper` with a given value. If no cursor exists, return a `Zipper` in which the cursor element is the given value. Examples:
+Implement the `setCursor` function, which replaces the cursor of a given `Zipper` with a given value. Examples:
 
 ```
 setCursor 9 (Zipper [3,2,1] 4 [5,6,7]) == Zipper [3,2,1] 9 [5,6,7]
@@ -222,7 +223,7 @@ setCursor 1 Zip                        == Zipper [] 1 []
 
 #### `next`
 
-Implement the `next` function, which shifts the cursor of the given `Zipper` one position to the right if it is possible to do so. Examples:
+Implement the `next` function, which returns the given `Zipper` shifted one position to the right if the shift is possible. Examples:
 
 ```
 next (Zipper [3,2,1] 4 [5,6,7]) == Just (Zipper [4,3,2,1] 5 [6,7])
@@ -232,7 +233,7 @@ next Zip                        == Nothing
 
 #### `prev`
 
-Implement the `prev` function, which shifts the cursor of the given `Zipper` one position to the left if it is possible to do so. Examples:
+Implement the `prev` function, which returns the given `Zipper` shifted one position to the left if the shift is possible. Examples:
 
 ```
 prev (Zipper [3,2,1] 4 [5,6,7]) == Just (Zipper [2,1] 3 [4,5,6,7])
@@ -242,7 +243,7 @@ prev Zip                        == Nothing
 
 #### `insertNext`
 
-Implement the `insertNext` function, which inserts a given value to the right of a given `Zipper`'s cursor and then shifts the cursor one position to the right. Examples:
+Implement the `insertNext` function, which inserts a given value to the right of a given `Zipper`'s cursor and returns that `Zipper` shifted so that the inserted value is the cursor. Examples:
 
 ```
 insertNext 9 (Zipper [3,2,1] 4 [5,6,7]) == Zipper [4,3,2,1] 9 [5,6,7]
@@ -252,7 +253,7 @@ insertNext 9 Zip                        == Zipper [] 9 []
 
 #### `insertPrev`
 
-Implement the `insertPrev` function, which inserts a given value to the left of a given `Zipper`'s cursor and then shifts the cursor one position to the left. Examples:
+Implement the `insertPrev` function, which inserts a given value to the left of a given `Zipper`'s cursor and returns that `Zipper` shifted so that the inserted value is the cursor. Examples:
 
 ```
 insertPrev 9 (Zipper [3,2,1] 4 [5,6,7]) == Zipper [3,2,1] 9 [4,5,6,7]
@@ -262,7 +263,7 @@ insertPrev 9 Zip                        == Zipper [] 9 []
 
 #### `nextCursor`
 
-Implement the `nextCursor` function, which returns a cursor of the given `Zipper` shifted one element to the right as well as that shifted `Zipper`, if shifting is possible. Examples:
+Implement the `nextCursor` function, which returns a cursor of the given `Zipper` shifted one element to the right paired with the shifted `Zipper`, if shifting is possible. Examples:
 
 ```
 nextCursor (Zipper [3,2,1] 4 [5,6,7])  == Just (5, Zipper [4,3,2,1] 5 [6,7])
@@ -272,7 +273,7 @@ nextCursor Zip                         == Nothing
 
 #### `prevCursor`
 
-Implement the `prevCursor` function, which returns a cursor of the given `Zipper` shifted one element to the left as well as that shifted `Zipper`, if shifting is possible. Examples:
+Implement the `prevCursor` function, which returns a cursor of the given `Zipper` shifted one element to the left paired with the shifted `Zipper`, if shifting is possible. Examples:
 
 ```
 prevCursor (Zipper [3,2,1] 4 [5,6,7])  == Just (3, Zipper [2,1] 3 [4,5,6,7])
@@ -286,27 +287,34 @@ prevCursor Zip                         == Nothing
 
 To represent a Brainfuck program, it is necessary to represent the program's instructions. This can be achieved using a sum type:
 
-> data Instruction = Incr | Decr | Next | Prev | Open | Loop | Read | Wrte
+> data Instruction = Incr -- Increment (+)
+>                  | Decr -- Decrement (-)
+>                  | Next -- Next cell (>)
+>                  | Prev -- Previous cell (<)
+>                  | Open -- Open loop ([)
+>                  | Loop -- Close loop (])
+>                  | Read -- Read cell (.)
+>                  | Wrte -- Write to cell (,)
 
-Observe that each of the data constructors of `Instruction` corresponds to one of the instructions of Brainfuck. (For the sake of brevity, `Instruction` values will occasionally be represented using only their first letter.) A Brainfuck program is a sequence of `Instruction`s. To implement loops, the structure that represents the sequence must enable forward and backward iteration. The `Zipper` is one such structure, allowing us to define Brainfuck programs as follows:
+Observe that each of the data constructors of `Instruction` corresponds to one of the instructions of Brainfuck. (For the sake of brevity, `Instruction` values will occasionally be represented using only their first letter.) A Brainfuck program is a sequence of `Instruction`s. To implement loops, the structure that represents the sequence must enable forward and backward iteration. The `Zipper` is one such structure and allows us to define Brainfuck programs as follows:
 
 > type Code = Zipper Instruction
 
-This makes `Code` an alias of `Zipper Instruction`, increasing the readability of our Haskell program while also allowing us apply any function that takes a `Zipper a` to values of type `Code`. The cursor of a `Code` represents the next instruction to be executed in the Brainfuck program.
+This makes `Code` an alias of `Zipper Instruction`, increasing the readability of our Haskell program while also allowing us apply any function that takes a `Zipper a` to values of type `Code`. The cursor of a value of type `Code` is the next instruction to be executed in the Brainfuck program.
 
 ### Required Functions
 
 #### Overview
 
-After each `Instruction` is processed, the program's sequence of instructions, `Code`, has to be shifted one position to the right. However, the `Open` and `Loop` instructions can require the instruction sequence to be shifted to the corresponding instruction, shifting from `Open` to `Loop` or `Loop` to `Open` depending on whether the loop is to be entered or repeated, respectively. Therefore we require three functions to process values of the `Code` type:
+After each `Instruction` is processed, the program's sequence of instructions, `Code`, has to be shifted one position to the right. However, the `Open` and `Loop` instructions may require the instruction sequence to be shifted to the corresponding instruction, shifting from `Open` to `Loop` or `Loop` to `Open` depending on whether the loop is to be entered or repeated, respectively. Therefore we require three functions to process values of the `Code` type:
 
 * `nextInstruction`: Allows us to shift to the next Brainfuck instruction.
 * `findMatchingLoop`: Allows us to skip the instructions within a loop.
-* `findMatchingOpen`: Allows us to repeat the instructions within a loop
+* `findMatchingOpen`: Allows us to repeat the instructions within a loop.
 
 #### `nextInstruction`
 
-Implement the `nextInstruction` function, which returns a cursor of the given `Code` shifted one element to the right as well as that shifted `Code`, if it was possible to shift.
+Implement the `nextInstruction` function, which returns a cursor of the given `Code` shifted one element to the right paired with the shifted `Code`, if shifting is possible. Examples:
 
 ```
 nextInstruction (Zipper [I, N] I [P])   == Just (P, Zipper [I, I, N] P [])
@@ -316,7 +324,7 @@ nextInstruction Zip                     == Nothing
 
 #### `findMatchingLoop`
 
-Implement the `findMatchingLoop` function, which takes a `Code` in which the cursor element is `Open` and returns that `Code` shifted so that the cursor element is the corresponding `Loop` instruction, if one exists. Example:
+Implement the `findMatchingLoop` function, which takes a `Code` and returns that `Code` shifted so that the cursor element is the corresponding `Loop` instruction, if one exists. Examples:
 
 ```
 findMatchingLoop (Zipper [] O [O, L, L]) == Just (Zipper [L, O, O] L [])
@@ -330,14 +338,14 @@ findMatchingLoop (Zipper [] R [])        == Nothing
 
 #### `findMatchingOpen`
 
-Implement the `findMatchingOpen` function, which takes a `Code` in which the cursor element is `Loop` and returns that `Code` shifted so that the cursor element is the corresponding `Open` instruction, if one exists. Example:
+Implement the `findMatchingOpen` function, which takes a `Code` and returns that `Code` shifted so that the cursor element is the corresponding `Open` instruction, if one exists. Example:
 
 ```
-findMatchingOpen (Zipper [L, O, O] L []) == Just (Zipper [] O [O, L, L])
-findMatchingOpen (Zipper [O] L [])       == Just (Zipper [] O [L])
-findMatchingOpen (Zipper [] O [L])       == Nothing
-findMatchingOpen (Zipper [] L [])        == Nothing
-findMatchingOpen (Zipper [] I [])        == Nothing
+findMatchingOpen (Zipper [L, O, O] Loop []) == Just (Zipper [] Open [O, L, L])
+findMatchingOpen (Zipper [O] Loop [])       == Just (Zipper [] Open [L])
+findMatchingOpen (Zipper [] Open [L])       == Nothing
+findMatchingOpen (Zipper [] Loop [])        == Nothing
+findMatchingOpen (Zipper [] Incr [])        == Nothing
 ```
 
 **Suggestion:** First implement `findMatchingOpen` for non-nested loops. After completing the interpreter, revise `findMatchingOpen` so that it can find the matching `Open` instruction for `Loop` regardless of loop nesting.
@@ -346,7 +354,7 @@ findMatchingOpen (Zipper [] I [])        == Nothing
 
 ### Simulating Infinite Cells
 
-To implement our interpreter we require a way to represent an infinite tape, and support the actions that may be performed on the tape in Brainfuck programs. The `Zipper` type closely resembles the conceptual tape of Turing's Machine. Its cursor can be used to represent the cell under the head of the Turing Machine, and the cursor can have an indefinite number of elements to its left and right. However, Brainfuck constrains the way in which we can modify the value in a cell, and our `Zipper` values are not infinite. We must create a collection of functions that operate on a `Zipper` value - this `Zipper` will represent our tape - and modify it in such a way that: 1) the bounded nature of the `Zipper` type is not apparent, and 2) that the instructions of Brainfuck programs are supported. To assist the readability of our code, `Zipper Integer` will be aliased thusly:
+To implement our interpreter, we must simulate an infinite tape and support the actions that may be performed on that tape by Brainfuck programs. The `Zipper` type closely resembles the conceptual tape of Turing's Machine. Its cursor can be used to represent the cell under the head of the Turing Machine, and the cursor can have an indefinite number of elements to its left and right. However, Brainfuck constrains the way in which we can modify the value in a cell, and our `Zipper` values are not infinite. We must create a collection of functions that operate on `Zipper` values and modify them in such a way that: 1) the bounded nature of the `Zipper` type is not apparent, and 2) that the instructions of Brainfuck programs are supported. To assist the readability of our code, `Zipper Integer` will be aliased thusly:
 
 > type Tape = Zipper Integer
 
@@ -356,7 +364,7 @@ Note that this allows us to apply any function that has a `Zipper a` argument to
 
 #### Overview
 
-Six functions are required to simulate an infinite tape for the purposes of Brainfunc. They correspond to the actions that may be performed on a tape according to the instructions of the Brainfuck program:
+Six functions are required to simulate an infinite tape for the purposes of Brainfunc. They correspond to the actions that may be performed on a tape by the instructions of the Brainfuck language:
 
 * `incrCell`: Allows us to increase the value in the current cell by one.
 * `decrCell`: Allows us to decrease the value in the current cell by one.
@@ -367,7 +375,7 @@ Six functions are required to simulate an infinite tape for the purposes of Brai
 
 #### `incrCell`
 
-Implement the `incrCell` function, which accepts a `Tape` and returns a `Tape` that is identical to the original except that the cursor's value is incremented by one. Example:
+Implement the `incrCell` function, which returns a `Tape` that is identical to the given `Tape` except that the cursor's value is incremented by one. Example:
 
 ```
 incrCell (Zipper [3,2,1] 5 [7,8,9]) == Zipper [3,2,1] 6 [7,8,9]
@@ -375,7 +383,7 @@ incrCell (Zipper [3,2,1] 5 [7,8,9]) == Zipper [3,2,1] 6 [7,8,9]
 
 #### `decrCell`
 
-Implement the `decrCell` function, which accepts a `Tape` and returns a `Tape` that is identical to the original except that the cursor's value is decremented by one. Example:
+Implement the `decrCell` function, which returns a `Tape` that is identical to the given `Tape` except that the cursor's value is decremented by one. Example:
 
 ```
 incrCell (Zipper [3,2,1] 5 [7,8,9]) == Zipper [3,2,1] 4 [7,8,9]
@@ -383,23 +391,27 @@ incrCell (Zipper [3,2,1] 5 [7,8,9]) == Zipper [3,2,1] 4 [7,8,9]
 
 #### `nextCell`
 
-Implement the `nextCell` function, which accepts a `Tape` and returns that `Tape` shifted one position to the right. Example:
+Implement the `nextCell` function, which returns a `Tape` identical to the given `Tape` except that the cursor is shifted one position to the right. Examples:
 
 ```
 nextCell (Zipper [3,2,1] 4 [5,6,7]) == Zipper [4,3,2,1] 5 [6,7]
+nextCell (Zipper [3,2,1] 4 [])      == Zipper [4,3,2,1] 0 []
+nextCell Zip                        == Zipper [] 0 []
 ```
 
 #### `prevCell`
 
-Implement the `prevCell` function, which accepts a `Tape` and returns that `Tape` shifted one position to the left. Example:
+Implement the `nextCell` function, which returns a `Tape` identical to the given `Tape` except that the cursor is shifted one position to the left. Examples:
 
 ```
 prevCell (Zipper [3,2,1] 4 [5,6,7]) == Zipper [2,1] 3 [4,5,6,7]
+prevCell (Zipper [] 4 [5,6,7])      == Zipper [] 0 [4,5,6,7]
+prevCell Zip                        == Zipper [] 0 []
 ```
 
 #### `readCell`
 
-Implement the `readCell` function, which returns the cursor element of the given `Tape`. Example:
+Implement the `readCell` function, which returns the cursor element of the given `Tape`. Examples:
 
 ```
 readCell (Zipper [3,2,1] 4 [5,6,7]) == 4
@@ -417,20 +429,20 @@ wrteCell 4 (Zipper [3,2,1] 9 [5,6,7]) == Zipper [3,2,1] 4 [5,6,7]
 
 ### From `Zipper` to Interpreter
 
-The functions developed thus far enable us to interact with `Zipper` values and treat `Zipper`s like a sequence of Brainfuck instructions or as an seemingly infinite sequence of cells. The next step is to implement the functionality that modifies our code or tape according to the Brainfuck instruction being processed, and then repeat that functionality for every instruction in the program. This is the stage where we encode the behaviour of the non-IO aspects of Brainfuck into our Haskell program.
+The functions developed thus far enable us to interact with `Zipper` values and treat `Zipper`s like a sequence of Brainfuck instructions or as an seemingly infinite sequence of cells. The next step is to implement the functionality that modifies our code and tape values according to the Brainfuck instruction being processed, and then repeats that functionality for every instruction in the code. This is the stage where we encode the behaviour of the non-IO aspects of Brainfuck into our Haskell program, creating an interpreter for a language equivalent to P''.
 
 ### Required Functions
 
 #### Overview
 
-To implement our Brainfuck interpreter, we require two groups of functions, 1) functions that apply the changes of a Brainfuck instruction to the code and tape, and 2) functions that extract instructions from the code and apply them:
+To implement our Brainfuck interpreter, we require two groups of functions, 1) functions that apply the effects of a Brainfuck instruction to the code and tape, and 2) functions that extract instructions from the code to determine which 'instruction functions' to apply:
 
-* `executeIncr`: Allows us to apply the `+` Brainfuck instruction to a code and tape.
-* `executeDecr`: Allows us to apply the `-` Brainfuck instruction to a code and tape.
-* `executeNext`: Allows us to apply the `>` Brainfuck instruction to a code and tape.
-* `executePrev`: Allows us to apply the `<` Brainfuck instruction to a code and tape.
-* `executeOpen`: Allows us to apply the `[` Brainfuck instruction to a code and tape.
-* `executeLoop`: Allows us to apply the `]` Brainfuck instruction to a code and tape.
+* `executeIncr`: Allows us to apply the `+` Brainfuck instruction to a code and tape pair.
+* `executeDecr`: Allows us to apply the `-` Brainfuck instruction to a code and tape pair.
+* `executeNext`: Allows us to apply the `>` Brainfuck instruction to a code and tape pair.
+* `executePrev`: Allows us to apply the `<` Brainfuck instruction to a code and tape pair.
+* `executeOpen`: Allows us to apply the `[` Brainfuck instruction to a code and tape pair.
+* `executeLoop`: Allows us to apply the `]` Brainfuck instruction to a code and tape pair.
 * `executeInstruction`: Allows us to execute a single non-IO instruction on the tape.
 * `executeCode`: Allows us to execute a sequence of non-IO instructions on the tape.
 
@@ -496,7 +508,7 @@ executeLoop (Zipper [O] L [], Zipper [] 0 []) ==
 
 #### `executeInstruction`
 
-Implement the `executeInstruction` function, which receives an `Instruction` and a `Code` and `Tape` and returns the resultant `Code` and `Tape` after 'executing' the `Instruction`. If the provided `Instruction` is an IO instruction (`Read` or `Wrte`) the function should error. Examples:
+Implement the `executeInstruction` function, which receives an `Instruction` and paired `Code` and `Tape` and returns the resultant `Code` and `Tape` after executing the `Instruction`. If the provided `Instruction` is an IO instruction (`Read` or `Wrte`) the function should error. Examples:
 
 ```
 executeInstruction Incr (Zipper [N,I,I] Incr [N,I], Zipper [2] 0 []) ==
@@ -517,7 +529,7 @@ executeInstruction Wrte (Zipper [I] Wrte [], Zipper [] 1 []) ==
 
 #### `executeCode`
 
-Implement the `executeCode` function, which takes a `Code` and a `Tape` and returns the `Tape` created by executing each `Instruction` in `Code` on the given `Tape`. Examples:
+Implement the `executeCode` function, which returns the `Tape` created by executing each `Instruction` in the given `Code` on the given `Tape`. Examples:
 
 ```
 executeCode (Zipper [] Next [I,I,N,D]) (Zipper [] 0 []) ==
@@ -531,40 +543,42 @@ executeCode Zip (Zipper [] 0 []) == Zipper [] 0 []
 
 #### IO in Brainfunc
 
-To implement the `Read` and `Wrte` instructions of the Brainfuck language it is necessary to perform IO actions. In Haskell, all IO operations occur within the `IO` context. The intention of this section is to provide an intuition for understanding this concept of 'contexts' and how values that are within a context can be modified using a syntactical structure called `do` notation. This is required knowledge for performing IO actions in Brainfunc.
+To implement the `Read` and `Wrte` instructions of the Brainfuck language it is necessary to perform IO actions. In Haskell, all IO operations occur within the `IO` context. The intention of this section is to provide an intuition for understanding this notion of 'context' and how values that are within a context can be modified using a syntactical structure called `do` notation. This is required knowledge for performing IO actions in Brainfunc.
 
 #### A Notion of Context
 
-Types like `List a` and `Maybe a` can be understood as providing a context for `a`. `List` takes `a` and represents a context where many values of `a` may exist. `Maybe` takes an `a` and represents the context that a value of type `a` may or may not be present. Often there is a sequence of operations to be applied to a value and each result is in a context. Handling the context can be cumbersome. Consider, for example, a function `squareOf` that returns the number that its argument is a square of (if any such number exists) and a function `naturalLog` that returns the natural logarithm of an integer:
+Types like `List` and `Maybe` can be interpreted as types that define a context for other types, changing how values of that type are manipulated. `List` takes `a` and represents a context where many values of `a` may exist. `Maybe` takes `a` and represents a context that a value of type `a` may or may not be present. Often a collection of functions must be used and each returns a value that lies within a context. Handling the context while manipulating the result values can be cumbersome. Consider, for example, a function `unSquare` that returns the integer square root of its argument (if any such number exists) and a function `naturalLog` that returns the natural logarithm of an integer:
 
 ```
-squareOf :: Integer -> Maybe Integer
+unSquare :: Integer -> Maybe Integer
 naturalLog :: Integer -> Maybe Double
 ```
 
-Note that for certain inputs both functions do not define a result, therefore the result must be in the `Maybe` context. To apply both `squareOf` and `naturalLog` to a value it is necessary to first match on the result of `squareOf`, which is verbose when using pattern matching:
+Note that for certain inputs both functions do not define a result, therefore the return values of both must exist in the `Maybe` context. To apply `naturalLog` to the result of `unSquare` it is necessary to first pattern match on the result of `unSquare` to handle the `Nothing` case:
 
 ```
-squareOfAndLogn :: Integer -> Maybe Double
-squareOfAndLogn x = case squareOf x of
+unSquareAndLogn :: Integer -> Maybe Double
+unSquareAndLogn x = case unSquare x of
     Just x' -> naturalLog x'
     Nothing -> Nothing
 ```
 
+The pattern matching syntax scales poorly as the number of expressions that evaluate to a value within a context increases.
+
 #### Using `do` Notation
 
-Haskell provides a special syntax, called `do` notation, that enables values that are in a context to be extracted from the context without requiring pattern matching. For example, `do` notation allows us to implement `squareOfAndLogn` as follows:
+Haskell provides a special syntax, called `do` notation, that enables values that are in a context to be extracted from the context without requiring pattern matching. For example, `do` notation allows us to implement `unSquareAndLogn` as follows:
 
 ```
-squareOfAndLogn :: Integer -> Maybe Double
-squareOfAndLogn x = do
-    x' <- squareOf x -- 1. Extracts x' from the Maybe Integer that is returned
-    			     --    by squareOf
+unSquareAndLogn :: Integer -> Maybe Double
+unSquareAndLogn x = do
+    x' <- unSquare x -- 1. Extracts x' from the Maybe Integer that is returned
+                     --    by unSquare
     naturalLog x'    -- 2. Applies the naturalLog function to the extracted
                      --    Integer x', resulting in a Maybe Double
 ```
 
-The `<-` syntax extracts the value from the context to its right, giving it the name of the term on its left (see 1.). The `<name> <-` syntax is optional and only required if the contextual value returned by the expression on the right is needed (see 2.). All expressions in a `do` block must evaluate to a type in the same context - e.g. `squareOf` and `naturalLog` both return `Maybe`s - but that the 'wrapped' type can vary - e.g. `squareOf` returns `Maybe Integer` whereas `naturalLog` returns `Maybe Double`. The result of a `do` block is the result of its last expression. Although the context represented by the `List` type is very different from the context of the `Maybe` type, it provides the same abstraction. Consider the following functions that take a `String` that represents the state of a Tic Tac Toe board and return a `List` of `String`s of the next possible board states:
+The `<-` syntax extracts the value from the context to its right, giving it the name of the term on its left (see 1.). The `<name> <-` syntax is optional and only required if the contextual value returned by the expression on the right is needed (see 2.). All expressions in a `do` block must evaluate to a type in the same context - e.g. `unSquare` and `naturalLog` both return `Maybe`s - but that the 'wrapped' type can vary - e.g. `unSquare` returns `Maybe Integer` whereas `naturalLog` returns `Maybe Double`. The result of a `do` block is the result of its last expression. Although the context represented by the `List` type is very different from the context of the `Maybe` type, the same abstraction can be applied. Consider the following functions that take a `String` that represents the state of a Tic Tac Toe board and return a `List` of `String`s of the next possible board states:
 
 ```
 xMove :: String -> [String]
@@ -589,7 +603,7 @@ oMoves board = do
 
 #### Managing IO Actions
 
-The relevance of this abstraction to Brainfunc (other than the simplification of `nextCursor` made possible by `do` notation) is that all data in Haskell that is associated with IO operations exists in the `IO` context, and we can manipulate that data using `do` notation. For example, the following functions enable input from and output to the terminal:
+The relevance of this abstraction to Brainfunc (other than the simplification of `nextCursor` made possible by `do` notation) is that all data in Haskell that is associated with IO operations exists in the `IO` context, and that pattern matching on values in the `IO` context is not possible. As such, `do` notation not only provides a concise syntax for manipulating values that exist in an `IO` context but also enables that manipulation to occur. For example, the following functions permit obtaining input from and providing output to the terminal:
 
 ```
 getLine :: IO String        -- Returns a String obtained from terminal input
@@ -610,7 +624,7 @@ main = do
                                   --    String and evaluates to IO ()
 ```
 
-In cases where it is useful to return a value that is not inside a context from a `do` block, the function `pure` exists. This function takes a value and returns that value in the required context. the appropriate context is determined from the usage of the expression in which `pure` appears. For example:
+V value that lies outside of the context of the `do` block can be placed inside the context by applying the `pure` function to it. The appropriate context is determined from the usage of the expression in which `pure` appears. For example:
 
 ```
 main :: IO ()
@@ -625,14 +639,14 @@ main = do
                                  -- since that's the return type of main
         "y" -> putStrLn "Hello!" -- 3a. Applies putStrLn to the given String
                                  --     resulting in a value of type IO ()
-        _   -> pure ()           -- 3b. Evaluates to () in the IO context
+        _   -> pure ()           -- 3b. Evaluates to a value of type IO ()
 ```
 
-The functions `putStrLn` and `getLine` provide the IO functionality required to implement the `Read` and `Wrte` IO instructions of Brainfuck in Haskell.
+The functions `putStrLn` and `getLine` provide the IO functionality required to implement the `Read` and `Wrte` IO instructions of Brainfuck in Haskell, and `do` notation provides the syntax that enables the use of these functions.
 
 #### Obtaining Integer Input
 
-The function `getLine` returns a `String`, but for the purposes of our Brainfuck interpreter we require `Integer` input from the user. It is for this reason that the `readMaybe` function exists. It has the following type:
+The function `getLine` returns a `String`, but for the purposes of our Brainfuck interpreter we require `Integer`s from the user. It is for this reason that the `readMaybe` function exists. It has the following type:
 
 ```
 readMaybe :: (Read a) => String -> Maybe a
@@ -657,10 +671,10 @@ Use `readMaybe` to ensure that the input provided by a user when executing the `
 
 #### Overview
 
-To complete the IO version of the interpreter we need to implement functions for the IO instructions and modify the existing `instruction` and `process` functions to account for the `IO` context. The following functions are required:
+To implement the IO version of the interpreter we need to implement functions that perform Brainfuck's IO instructions and modify the existing `instruction` and `process` functions to account for the `IO` context. The following functions are required:
 
-* `executeRead`: Allows us to apply the `.` Brainfuck instruction to a code and tape.
-* `executeWrte`: Allows us to apply the `,` Brainfuck instruction to a code and tape.
+* `executeRead`: Allows us to apply the `.` Brainfuck instruction to a code and tape pair.
+* `executeWrte`: Allows us to apply the `,` Brainfuck instruction to a code and tape pair.
 * `executeInstructionIO`: Extends `executeInstruction` to support IO instructions.
 * `executeCodeIO`: Allows us to execute a sequence of instructions, including IO, on the tape.
 
@@ -686,7 +700,7 @@ executeWrte (Zipper [I,I] W []) (Zipper [] 2 []) ==
 
 #### `executeInstructionIO`
 
-Implement the `executeInstructionIO` function, which receives an `Instruction` and a `Code` and `Tape` and returns the resultant `Code` and `Tape` in the context of `IO` after 'executing' the `Instruction`. Examples:
+Implement the `executeInstructionIO` function, which receives an `Instruction` and a `Code` and `Tape` pair and returns the resultant `Code` and `Tape` in the context of `IO` after 'executing' the `Instruction`. Examples:
 
 ```
 executeInstructionIO Read (Zipper [I,I] Read [N,I], Zipper [] 2 []) ==
@@ -716,13 +730,13 @@ executeCodeIO Zip (Zipper [] 0 []) == IO ()
 
 ### Interpreting Source Code
 
-Although `processIO` executes our interpreter, it requires Brainfuck programs to be encoded as a series of `Instruction`s. To complete Brainfunc we need to enable loading Brainfuck source code - the common representation of Brainfuck programs - and convert it into our instruction sequence. We also need to support the user providing that source code to the program in some manner. These final tasks will turn our interpreter functionality into a complete program that can be run from the command prompt.
+Although `processIO` executes our interpreter, it requires Brainfuck programs to be encoded as a series of `Instruction`s. To complete Brainfunc we need to enable loading Brainfuck source code - the common representation of Brainfuck programs - and convert it into our instruction sequence. We also need to support the user providing that source code to our interpreter in some manner. These final tasks will turn our interpreter into a complete program that can be run from the command prompt.
 
 ### Required Functions
 
 #### Overview
 
-To complete Brainfunc, the following functions are required:
+To complete Brainfunc, we must create a trivial parser and functionality that executes the parsed input. We require the following functions:
 
 * `charToInstruction`: Allows us to map a Brainfuck term to a Brainfuck instruction.
 * `stringToCode`: Allows us to convert Brainfuck source code into a sequence of Brainfuck instructions.
@@ -740,17 +754,17 @@ charToInstruction 'c' == Nothing
 
 #### `stringToCode`
 
-Implement the `stringToCode` function, which takes a `String` representing Brainfuck source code and returns the `Code` that the `String` defines. Examples:
+Implement the `stringToCode` function, which takes a `String` representing Brainfuck source code and returns the `[Instruction]` that the `String` defines. Examples:
 
 ```
-stringToCode "++." == Zipper [] Incr [I,R]
-stringToCode "+h." == Zipper [] Incr [R]
-stringToCode "cat" == Zip
+stringToCode "++." == [Incr, Incr, Read]
+stringToCode "+h." == [Incr, Read]
+stringToCode "cat" == []
 ```
 
 #### `process`
 
-Implement the `process` function, which takes a `String` representing Brainfuck source code and generates the corresponding `Code`, then applies `processIO` to that `Code` and a default `Tape`. Examples:
+Implement the `process` function, which takes a `String` representing Brainfuck source code and generates the corresponding `Code`, then applies `executeCodeIO` to that `Code` and a `Tape`. Examples:
 
 ```
 process "+.>,<.>." == IO ()
@@ -768,7 +782,7 @@ Implement the `main` function, which asks a user to enter Brainfuck source code 
 
 Consider extending your Brainfunc program in the following ways:
 
-* Modify the `main` function so that it executes a Brainfuck source file at a location specified by a command-line argument. Note that there is a `getArgs :: IO [String]` function in the `System.Environment` module that returns a list of the arguments provided to your program at the command line.
+* Modify the `main` function so that it executes a Brainfuck source file at a location specified by a command-line argument. Note that there is a `getArgs :: IO [String]` function in the `System.Environment` module that returns a list of the arguments provided to the program at the command line.
 * Modify `instructionIO` so that it supports reading and writing `Integer` values that are less than 256 as `ASCII`-formatted characters. Note that the functions `ord` and `chr` in the `Data.Char` module can convert `Char` to `Int` and `Int` to `Char`, respectively. There is also a function `toInteger` that can convert `Int` to `Integer` in the base module.
 
-Finally, reflect on the code you have created. Consider its overall structure, and the correctness of each function. Consider how robust the design is to logical defects and assess the risk of defects being introduced during the maintenance phase. How could the code be reorganised to eliminate some of the risks to correctness? How could the exceptional cases be represented using types, and when is the use of `error` justified? Also consider the patterns that repeat over and over in the code. Where can `do` notation be used to simplify Brainfunc? How can we exploit the symmetry of `incrCell`-`decrCell`, `nextCell`-`prevCell` and `findMatchingLoop`-`findMatchingOpen` to simplify the implementation? What implications would such changes have on the correctness of the program? Hopefully Brainfunc has provided some insight into threats to correctness and the power of Haskell in minimising the risk of software defects.
+Finally, reflect on the code you have created. Consider its overall structure, and the correctness of each function. Consider how robust the design is to logical defects and assess the risk of defects being introduced during the maintenance phase. How could the code be reorganised to eliminate some of the risks to correctness? How could the exceptional cases be represented using types, and when is the use of `error` justified? Also consider the patterns that repeat over and over in the code. Where can `do` notation be used to simplify Brainfunc? How can we exploit the symmetry of `incrCell`-`decrCell`, `nextCell`-`prevCell` and `findMatchingLoop`-`findMatchingOpen` to simplify their implementations? What implications would such changes have on the correctness of the program? Hopefully Brainfunc has provided some insight into threats to correctness and the power of Haskell in minimising the risk of software defects.
