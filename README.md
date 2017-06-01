@@ -16,6 +16,7 @@ This document describes how to build an interpreter for the Brainfuck language u
 * [Building a Brainfuck Interpreter](#building-a-brainfuck-interpreter)
 * [Completing Brainfunc](#completing-brainfunc)
 * [Extending Brainfunc](#extending-brainfunc)
+* [Wrap-up](#wrap-up)
 * [Worked Examples](#worked-examples)
 
 ## How to Use this Material
@@ -794,4 +795,6 @@ Consider extending your Brainfunc program in the following ways:
 * Modify `instructionIO` so that it supports reading and writing `Integer` values that are less than 256 as `ASCII`-formatted characters. Note that the functions `ord` and `chr` in the `Data.Char` module can convert `Char` to `Int` and `Int` to `Char`, respectively. There is also a function `toInteger` that can convert `Int` to `Integer` in the base module.
 * Support a command line flag that causes the interpreter to run in P'' mode in which only the non-IO Brainfuck instructions are supported. Print the state of the tape after the code is executed to the terminal. Note that by suffixing a type definition with `deriving (Show)`, an implementation of the `Show` typeclass is automatically generated for the type, allowing the function `show :: Show a => a -> String` to be used to create a `String` representation of values of the type.
 
-Finally, reflect on the code you have created. Consider its overall structure, and the correctness of each function. Consider how robust the design is to logical defects and assess the risk of defects being introduced during the maintenance phase. How could the code be reorganised to eliminate some of the risks to correctness? How could the exceptional cases be represented using types, and when is the use of `error` justified? Also consider the patterns that repeat over and over in the code. Where can `do` notation be used to simplify Brainfunc? How can we exploit the symmetry of `incrCell`-`decrCell`, `nextCell`-`prevCell` and `findMatchingLoop`-`findMatchingOpen` to simplify their implementations? What implications would such changes have on the correctness of the program? Hopefully Brainfunc has provided some insight into threats to correctness and the power of Haskell in minimising the risk of software defects.
+## Wrap-up
+
+Reflect on the code you have created. Consider its overall structure, and the correctness of each function. Consider how robust the design is to logical defects and assess the risk of defects being introduced during the maintenance phase. How could the code be reorganised to eliminate some of the risks to correctness? How could the exceptional cases be represented using types, and when is the use of `error` justified? Also consider the patterns that repeat over and over in the code. Where can `do` notation be used to simplify Brainfunc? How can we exploit the symmetry of `incrCell`-`decrCell`, `nextCell`-`prevCell` and `findMatchingLoop`-`findMatchingOpen` to simplify their implementations? What implications would such changes have on the correctness of the program? Hopefully Brainfunc has provided some insight into threats to correctness and the power of Haskell in minimising the risk of software defects.
