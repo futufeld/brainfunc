@@ -144,7 +144,9 @@ Haskell contains an `error` function that enables the execution of a program to 
 
 `List` is defined as a value followed by a `List` of values. We can exploit this structure to move rightwards through a `List` value using recursion. However, the structure of `List` is too limited to allow us to move leftwards through its elements. We require a `List` that has a 'tail' in both the left and right directions. This is the motivation for the `Zipper` type, which has the following structure:
 
-> data Zipper a = Zip | Zipper [a] a [a]
+```
+data Zipper a = Zip | Zipper [a] a [a]
+```
 
 A value of type `Zipper` is either a `Zip`, which is a `Zipper` that contains no elements, or it is a cursor element of type `a` with `List`s of elements, also of type `a`, to both its left and right. The following are all `Zipper` values:
 
@@ -287,18 +289,22 @@ prevCursor Zip                         == Nothing
 
 To represent a Brainfuck program, it is necessary to represent the program's instructions. This can be achieved using a sum type:
 
-> data Instruction = Incr -- Increment (+)
->                  | Decr -- Decrement (-)
->                  | Next -- Next cell (>)
->                  | Prev -- Previous cell (<)
->                  | Open -- Open loop ([)
->                  | Loop -- Close loop (])
->                  | Read -- Read cell (.)
->                  | Wrte -- Write to cell (,)
+```
+data Instruction = Incr -- Increment (+)
+                 | Decr -- Decrement (-)
+                 | Next -- Next cell (>)
+                 | Prev -- Previous cell (<)
+                 | Open -- Open loop ([)
+                 | Loop -- Close loop (])
+                 | Read -- Read cell (.)
+                 | Wrte -- Write to cell (,)
+```
 
 Observe that each of the data constructors of `Instruction` corresponds to one of the instructions of Brainfuck. (For the sake of brevity, `Instruction` values will occasionally be represented using only their first letter.) A Brainfuck program is a sequence of `Instruction`s. To implement loops, the structure that represents the sequence must enable forward and backward iteration. The `Zipper` is one such structure and allows us to define Brainfuck programs as follows:
 
-> type Code = Zipper Instruction
+```
+type Code = Zipper Instruction
+```
 
 This makes `Code` an alias of `Zipper Instruction`, increasing the readability of our Haskell program while also allowing us apply any function that takes a `Zipper a` to values of type `Code`. The cursor of a value of type `Code` is the next instruction to be executed in the Brainfuck program.
 
@@ -356,7 +362,9 @@ findMatchingOpen (Zipper [] Incr [])        == Nothing
 
 To implement our interpreter, we must simulate an infinite tape and support the actions that may be performed on that tape by Brainfuck programs. The `Zipper` type closely resembles the conceptual tape of Turing's Machine. Its cursor can be used to represent the cell under the head of the Turing Machine, and the cursor can have an indefinite number of elements to its left and right. However, Brainfuck constrains the way in which we can modify the value in a cell, and our `Zipper` values are not infinite. We must create a collection of functions that operate on `Zipper` values and modify them in such a way that: 1) the bounded nature of the `Zipper` type is not apparent, and 2) that the instructions of Brainfuck programs are supported. To assist the readability of our code, `Zipper Integer` will be aliased thusly:
 
-> type Tape = Zipper Integer
+```
+type Tape = Zipper Integer
+```
 
 Note that this allows us to apply any function that has a `Zipper a` argument to any value of type `Tape`.
 
