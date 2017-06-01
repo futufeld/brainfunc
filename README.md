@@ -144,7 +144,7 @@ Haskell contains an `error` function that enables the execution of a program to 
 
 ### Building a Zipper
 
-#### Defining Zipper
+#### Defining `Zipper`
 
 `List` is defined as a value followed by a `List` of values. We can exploit this structure to move rightwards through a `List` value using recursion. However, the structure of `List` is too limited to allow us to move leftwards through its elements. We require a `List` that has a 'tail' in both the left and right directions. This is the motivation for the `Zipper` type, which has the following structure:
 
