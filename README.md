@@ -221,7 +221,7 @@ Implement the `setCursor` function, which replaces the cursor of a given `Zipper
 
 ```
 setCursor 9 (Zipper [3,2,1] 4 [5,6,7]) == Zipper [3,2,1] 9 [5,6,7]
-setCursor "?" (Zipper "ac" 't' "nip")  == Zipper "ac" '?' "nip"
+setCursor '?' (Zipper "ac" 't' "nip")  == Zipper "ac" '?' "nip"
 setCursor 1 Zip                        == Zipper [] 1 []
 ```
 
@@ -323,9 +323,12 @@ After each `Instruction` is processed, the program's sequence of instructions, `
 Implement the `nextInstruction` function, which returns a cursor of the given `Code` shifted one element to the right paired with the shifted `Code`, if shifting is possible. Examples:
 
 ```
-nextInstruction (Zipper [I, N] I [P])   == Just (P, Zipper [I, I, N] P [])
-nextInstruction (Zipper [I, I, N] P []) == Nothing
-nextInstruction Zip                     == Nothing
+nextInstruction (Zipper [Incr,Next] Incr [Prev])
+    == Just (Prev, Zipper [Incr,Incr,Next] Prev [])
+nextInstruction (Zipper [Incr,Incr,Next] Prev [])
+    == Nothing
+nextInstruction Zip
+    == Nothing
 ```
 
 #### `findMatchingLoop`
@@ -333,11 +336,16 @@ nextInstruction Zip                     == Nothing
 Implement the `findMatchingLoop` function, which takes a `Code` and returns that `Code` shifted so that the cursor element is the corresponding `Loop` instruction, if one exists. Examples:
 
 ```
-findMatchingLoop (Zipper [] O [O, L, L]) == Just (Zipper [L, O, O] L [])
-findMatchingLoop (Zipper [] O [L])       == Just (Zipper [O] L [])
-findMatchingLoop (Zipper [O] L [])       == Nothing
-findMatchingLoop (Zipper [] O [])        == Nothing
-findMatchingLoop (Zipper [] R [])        == Nothing
+findMatchingLoop (Zipper [] Open [Open,Loop,Loop])
+    == Just (Zipper [Loop,Open,Open] Loop [])
+findMatchingLoop (Zipper [] Open [Loop])
+    == Just (Zipper [Open] Loop [])
+findMatchingLoop (Zipper [Open] Loop [])
+    == Nothing
+findMatchingLoop (Zipper [] Open [])
+    == Nothing
+findMatchingLoop (Zipper [] Read [])
+    == Nothing
 ```
 
 **Suggestion:** First implement `findMatchingLoop` for non-nested loops. After completing the interpreter, revise `findMatchingLoop` so that it can find the matching `Loop` instruction for `Open` regardless of loop nesting.
@@ -347,11 +355,16 @@ findMatchingLoop (Zipper [] R [])        == Nothing
 Implement the `findMatchingOpen` function, which takes a `Code` and returns that `Code` shifted so that the cursor element is the corresponding `Open` instruction, if one exists. Example:
 
 ```
-findMatchingOpen (Zipper [L, O, O] Loop []) == Just (Zipper [] Open [O, L, L])
-findMatchingOpen (Zipper [O] Loop [])       == Just (Zipper [] Open [L])
-findMatchingOpen (Zipper [] Open [L])       == Nothing
-findMatchingOpen (Zipper [] Loop [])        == Nothing
-findMatchingOpen (Zipper [] Incr [])        == Nothing
+findMatchingOpen (Zipper [Loop,Open,Open] Loop [])
+    == Just (Zipper [] Open [Open,Loop,Loop])
+findMatchingOpen (Zipper [Open] Loop [])
+    == Just (Zipper [] Open [Loop])
+findMatchingOpen (Zipper [] Open [Loop])
+    == Nothing
+findMatchingOpen (Zipper [] Loop [])
+    == Nothing
+findMatchingOpen (Zipper [] Incr [])
+    == Nothing
 ```
 
 **Suggestion:** First implement `findMatchingOpen` for non-nested loops. After completing the interpreter, revise `findMatchingOpen` so that it can find the matching `Open` instruction for `Loop` regardless of loop nesting.
@@ -392,7 +405,7 @@ incrCell (Zipper [3,2,1] 5 [7,8,9]) == Zipper [3,2,1] 6 [7,8,9]
 Implement the `decrCell` function, which returns a `Tape` that is identical to the given `Tape` except that the cursor's value is decremented by one. Example:
 
 ```
-incrCell (Zipper [3,2,1] 5 [7,8,9]) == Zipper [3,2,1] 4 [7,8,9]
+decrCell (Zipper [3,2,1] 5 [7,8,9]) == Zipper [3,2,1] 4 [7,8,9]
 ```
 
 #### `nextCell`
@@ -457,8 +470,8 @@ In the next section, we will extend this collection of functions to support Brai
 Implement the `executeIncr` function, which receives a `Code` and `Tape` and returns the resultant `Code` and `Tape` after executing the `Incr` instruction. Example:
 
 ```
-executeIncr (Zipper [I] I [N,W], Zipper [] 1 []) ==
-    (Zipper [I] I [N,W], Zipper [] 2 [])
+executeIncr (Zipper [Incr] Incr [Next,Wrte], Zipper [] 1 []) ==
+    (Zipper [Incr] Incr [Next,Wrte], Zipper [] 2 [])
 ```
 
 #### `executeDecr`
@@ -466,8 +479,8 @@ executeIncr (Zipper [I] I [N,W], Zipper [] 1 []) ==
 Implement the `executeDecr` function, which receives a `Code` and `Tape` and returns the resultant `Code` and `Tape` after executing the `Decr` instruction. Example:
 
 ```
-executeDecr (Zipper [I] D [D,D], Zipper [] 1 []) ==
-    (Zipper [I] D [D,D], Zipper [] 0 [])
+executeDecr (Zipper [Incr] Decr [Decr,Decr], Zipper [] 1 []) ==
+    (Zipper [Inrc] Decr [Decr,Decr], Zipper [] 0 [])
 ```
 
 #### `executeNext`
@@ -475,8 +488,8 @@ executeDecr (Zipper [I] D [D,D], Zipper [] 1 []) ==
 Implement the `executeNext` function, which receives a `Code` and `Tape` and returns the resultant `Code` and `Tape` after executing the `Next` instruction. Example:
 
 ```
-executeNext (Zipper [I] N [D,R], Zipper [] 1 []) ==
-    (Zipper [I] N [D,R], Zipper [1] 0 [])
+executeNext (Zipper [Incr] Next [Decr,Read], Zipper [] 1 []) ==
+    (Zipper [Incr] Next [Decr,Read], Zipper [1] 0 [])
 ```
 
 #### `executePrev`
@@ -484,8 +497,8 @@ executeNext (Zipper [I] N [D,R], Zipper [] 1 []) ==
 Implement the `executePrev` function, which receives a `Code` and `Tape` and returns the resultant `Code` and `Tape` after executing the `Prev` instruction. Example:
 
 ```
-executePrev (Zipper [I] P [D,R], Zipper [] 1 []) ==
-    (Zipper [I] P [D,R], Zipper [] 0 [1])
+executePrev (Zipper [Incr] Prev [Decr,Read], Zipper [] 1 []) ==
+    (Zipper [Incr] Prev [Decr,Read], Zipper [] 0 [1])
 ```
 
 #### `executeOpen`
@@ -493,10 +506,10 @@ executePrev (Zipper [I] P [D,R], Zipper [] 1 []) ==
 Implement the `executeOpen` function, which receives a `Code` and `Tape` and returns the resultant `Code` and `Tape` after executing the `Open` instruction. Examples:
 
 ```
-executeOpen (Zipper [I] O [L], Zipper [] 1 []) ==
-    (Zipper [I] O [L], Zipper [] 0 [])
-executeOpen (Zipper [] O [D,L], Zipper [] 0 []) ==
-    (Zipper [D,O] L [], Zipper [] 0 [])
+executeOpen (Zipper [Incr] Open [Loop], Zipper [] 1 []) ==
+    (Zipper [Incr] Open [Loop], Zipper [] 1 [])
+executeOpen (Zipper [] Open [Decr,Loop], Zipper [] 0 []) ==
+    (Zipper [Decr,Open] Loop [], Zipper [] 0 [])
 ```
 
 #### `executeLoop`
@@ -504,10 +517,10 @@ executeOpen (Zipper [] O [D,L], Zipper [] 0 []) ==
 Implement the `executeLoop` function, which receives a `Code` and `Tape` and returns the resultant `Code` and `Tape` after executing the `Loop` instruction. Examples:
 
 ```
-executeLoop (Zipper [O,I] L [], Zipper [] 1 []) ==
-    (Zipper [I] O [L], Zipper [] 1 [])
-executeLoop (Zipper [O] L [], Zipper [] 0 []) ==
-    (Zipper [O] L [], Zipper [] 0 [])
+executeLoop (Zipper [Open,Incr] Loop [], Zipper [] 1 []) ==
+    (Zipper [Incr] Open [Loop], Zipper [] 1 [])
+executeLoop (Zipper [Open] Loop [], Zipper [] 0 []) ==
+    (Zipper [Open] Loop [], Zipper [] 0 [])
 ```
 
 #### `executeInstruction`
@@ -515,19 +528,19 @@ executeLoop (Zipper [O] L [], Zipper [] 0 []) ==
 Implement the `executeInstruction` function, which receives an `Instruction` and paired `Code` and `Tape` and returns the resultant `Code` and `Tape` after executing the `Instruction`. If the provided `Instruction` is an IO instruction (`Read` or `Wrte`) the function should error. Examples:
 
 ```
-executeInstruction Incr (Zipper [N,I,I] Incr [N,I], Zipper [2] 0 []) ==
-    (Zipper [N,I,I] Incr [N,I], Zipper [2] 1 [])
-executeInstruction Open (Zipper [] Open [I,I,L], Zipper [] 0 []) ==
-    (Zipper [I,I,O] Loop [], Zipper [] 0 [])
-executeInstruction Open (Zipper [I] Open [I,I,L], Zipper [] 1 []) ==
-    (Zipper [I] Open [I,I,L], Zipper [] 1 [])
-executeInstruction Loop (Zipper [D,O,I] Loop [I], Zipper [] 0 []) ==
-    (Zipper [D,O,I] Loop [I], Zipper [] 0 [])
-executeInstruction Loop (Zipper [O,I] Loop [I], Zipper [] 1 []) ==
-    (Zipper [I] Open [L,I], Zipper [] 1 [])
+executeInstruction Incr (Zipper [Next,Incr] Incr [Prev], Zipper [1] 0 []) ==
+    (Zipper [Next,Incr] Incr [Prev], Zipper [1] 1 [])
+executeInstruction Open (Zipper [] Open [Incr,Incr,Loop], Zipper [] 0 []) ==
+    (Zipper [Incr,Incr,Open] Loop [], Zipper [] 0 [])
+executeInstruction Open (Zipper [Incr] Open [Incr,Loop], Zipper [] 1 []) ==
+    (Zipper [Incr] Open [Incr,Loop], Zipper [] 1 [])
+executeInstruction Loop (Zipper [Decr,Open,Incr] Loop [], Zipper [] 0 []) ==
+    (Zipper [Decr,Open,Incr] Loop [], Zipper [] 0 [])
+executeInstruction Loop (Zipper [Open,Incr] Loop [Incr], Zipper [] 1 []) ==
+    (Zipper [Incr] Open [Loop,Incr], Zipper [] 1 [])
 executeInstruction Read (Zipper [] Read [], Zipper [] 0 []) ==
     error "Unsupported instruction!"
-executeInstruction Wrte (Zipper [I] Wrte [], Zipper [] 1 []) ==
+executeInstruction Wrte (Zipper [Incr] Wrte [], Zipper [] 1 []) ==
     error "Unsupported instruction!"
 ```
 
@@ -536,9 +549,12 @@ executeInstruction Wrte (Zipper [I] Wrte [], Zipper [] 1 []) ==
 Implement the `executeCode` function, which returns the `Tape` created by executing each `Instruction` in the given `Code` on the given `Tape`. Examples:
 
 ```
-executeCode (Zipper [] Next [I,I,N,D]) (Zipper [] 0 []) ==
-    (Zipper [N,I,I,N] Decr [], Zipper [2, 0] -1 [])
-executeCode Zip (Zipper [] 0 []) == Zipper [] 0 []
+executeCode (Zipper [] Next [Incr,Incr,Next,Decr]) (Zipper [] 0 []) ==
+    Zipper [2,0] (-1) []
+executeCode Zip (Zipper [] 0 [])
+    == Zipper [] 0 []
+executeCode Zip Zip
+    == Zipper [] 0 []
 ```
 
 ### Building a Brainfuck Interpreter
@@ -683,8 +699,9 @@ To implement the IO version of the interpreter we need to implement functions th
 Implement the `executeRead` function, which receives a `Code` and `Tape`, writes the value in the current cell of the `Tape` to the terminal, then returns the resultant `Code` and `Tape`. Example:
 
 ```
-executeRead (Zipper [I,I] R []) (Zipper [] 2 []) ==
-    (Zipper [I,I] R []) (Zipper [] 2 []) -- '2' is printed to terminal
+executeRead (Zipper [Incr,Incr] Read [], Zipper [] 2 []) ==
+    (Zipper [Incr,Incr] Read [], Zipper [] 2 [])
+    -- '2' is printed to the terminal
 ```
 
 #### `executeWrte`
@@ -692,8 +709,9 @@ executeRead (Zipper [I,I] R []) (Zipper [] 2 []) ==
 Implement the `executeWrte` function, which receives a `Code` and `Tape` and returns the resultant `Code` and `Tape` after executing the `Wrte` instruction, which replaces the `Tape`'s cursor element with the `Integer` value input by the user at the terminal. Example:
 
 ```
-executeWrte (Zipper [I,I] W []) (Zipper [] 2 []) ==
-    (Zipper [I,I] W []) (Zipper [] 5 []) -- '5' was entered at terminal
+executeWrte (Zipper [Incr,Incr] Wrte [], Zipper [] 2 []) ==
+    (Zipper [Incr,Incr] Wrte [], Zipper [] 5 [])
+    -- '5' was entered at the terminal
 ```
 
 **Suggestion:** First implement `executeWrte` so that it calls `error` when a `String` that cannot be converted into an `Integer` is provided by the user. After completing the interpreter, extend `executeWrte` so that it ignores 'unreadable' input and simply prompts the user for input until they provide a value in the expected format.
@@ -703,16 +721,18 @@ executeWrte (Zipper [I,I] W []) (Zipper [] 2 []) ==
 Implement the `executeInstructionIO` function, which receives an `Instruction` and a `Code` and `Tape` pair and returns the resultant `Code` and `Tape` in the context of `IO` after 'executing' the `Instruction`. Examples:
 
 ```
-executeInstructionIO Read (Zipper [I,I] Read [N,I], Zipper [] 2 []) ==
-    IO (Zipper [I,I] Read [N,I], Zipper [] 2 []) -- '2' is printed to terminal
-executeInstructionIO Wrte (Zipper [D,D] Wrte [P], Zipper [] (-2) []) ==
-    IO (Zipper [D,D] Wrte [P], Zipper [] 5 []) -- '5' was entered at terminal
-executeInstructionIO Incr (Zipper [N,I,I] Incr [N,I], Zipper [2] 0 [0,0]) ==
-    IO (Zipper [N,I,I] Incr [N,I], Zipper [2] 1 [0,0])
-executeInstructionIO Open (Zipper [I] Open [I,I,L], Zipper [] 1 []) ==
-    IO (Zipper [I] Open [I,I,L], Zipper [] 1 [])
-executeInstructionIO Loop (Zipper [O,I] Loop [I], Zipper [] 1 []) ==
-    IO (Zipper [I] Open [L,I], Zipper [] 1 [])
+executeInstructionIO Read (Zipper [Incr,Incr] Read [Next], Zipper [] 2 []) ==
+    IO (Zipper [Incr,Incr] Read [Next], Zipper [] 2 [])
+    -- '2' is printed to terminal
+executeInstructionIO Wrte (Zipper [Decr,Decr] Wrte [], Zipper [] (-2) []) ==
+    IO (Zipper [Decr,Decr] Wrte [], Zipper [] 5 [])
+    -- '5' was entered at terminal
+executeInstructionIO Incr (Zipper [Next,Incr] Incr [], Zipper [1] 0 []) ==
+    IO (Zipper [Next,Incr] Incr [], Zipper [1] 1 [])
+executeInstructionIO Open (Zipper [Incr] Open [Incr,Loop], Zipper [] 1 []) ==
+    IO (Zipper [Incr] Open [Incr,Loop], Zipper [] 1 [])
+executeInstructionIO Loop (Zipper [Open,Incr] Loop [Incr], Zipper [] 1 []) ==
+    IO (Zipper [Incr] Open [Loop,Incr], Zipper [] 1 [])
 ```
 
 #### `executeCodeIO`
@@ -720,10 +740,12 @@ executeInstructionIO Loop (Zipper [O,I] Loop [I], Zipper [] 1 []) ==
 Implement the `executeCodeIO` function, which takes a `Code` and a `Tape`, 'executes' every instruction in the `Code` on the `Tape`, and returns `IO ()`. Examples:
 
 ```
-executeCodeIO (Zipper [] Incr [I,R,N,W,P,R,N,R]) (Zipper [] 0 []) == IO ()
+code = zipperFromList [Incr,Incr,Read,Next,Wrte,Prev,Read,Next,Read]
+executeCodeIO code (Zipper [] 0 []) == IO ()
     -- Prints '2' to the terminal, waits for input from the user,
     -- prints '2' to the terminal again, then prints the input value
-executeCodeIO Zip (Zipper [] 0 []) == IO ()
+executeCodeIO Zip Zip               == IO ()
+    -- Performs no side-effects
 ```
 
 ### Completing Brainfunc
@@ -766,8 +788,8 @@ Implement the `process` function, which takes a `String` representing Brainfuck 
 
 ```
 process "+.>,<.>." == IO ()
-    -- Prints '2' to the terminal, waits for input from the user,
-    -- prints '2' to the terminal again, then prints the input value
+    -- Prints '1' to the terminal, waits for input from the user,
+    -- prints '1' to the terminal again, then prints the input value
 process [] == IO ()
     -- Performs no side-effects
 ```
