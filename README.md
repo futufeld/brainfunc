@@ -19,6 +19,12 @@ This document describes how to build an interpreter for the Brainfuck language u
     * [Extending Brainfunc](#extending-brainfunc)
     * [Wrap-up](#wrap-up)
 * [Worked Examples](#worked-examples)
+    * [`Zipper` Functions](#zipper-functions)
+    * [`Code` Functions](#code-functions)
+    * [`Tape` Functions](#tape-functions)
+    * [P'' Functions](#p-functions)
+    * [Brainfuck Functions](#brainfuck-functions)
+    * [Completion Functions](#completion-functions)
 
 ## How to Use this Material
 
@@ -805,7 +811,652 @@ Consider extending your Brainfunc program in the following ways:
 * Modify the `main` function so that it executes a Brainfuck source file at a location specified by a command-line argument. Note that there is a `getArgs :: IO [String]` function in the `System.Environment` module that returns a list of the arguments provided to the program at the command line.
 * Modify `instructionIO` so that it supports reading and writing `Integer` values that are less than 256 as `ASCII`-formatted characters. Note that the functions `ord` and `chr` in the `Data.Char` module can convert `Char` to `Int` and `Int` to `Char`, respectively. There is also a function `toInteger` that can convert `Int` to `Integer` in the base module.
 * Support a command line flag that causes the interpreter to run in P'' mode in which only the non-IO Brainfuck instructions are supported. Print the state of the tape after the code is executed to the terminal. Note that by suffixing a type definition with `deriving (Show)`, an implementation of the `Show` typeclass is automatically generated for the type, allowing the function `show :: Show a => a -> String` to be used to create a `String` representation of values of the type.
+* Modify Brainfunc so that two `Instruction` types exist, one each for Brainfuck's non-IO and IO instructions. Make the non-IO instruction type a subset of the IO instruction type. Correct the `executeInstruction` function using the new types, and use `executeInstruction` to simplify `executeInstructionIO`.
 
 ### Wrap-up
 
-Reflect on the code you have created. Consider its overall structure, and the correctness of each function. Consider how robust the design is to logical defects and assess the risk of defects being introduced during the maintenance phase. How could the code be reorganised to eliminate some of the risks to correctness? How could the exceptional cases be represented using types, and when is the use of `error` justified? Also consider the patterns that repeat over and over in the code. Where can `do` notation be used to simplify Brainfunc? How can we exploit the symmetry of `incrCell`-`decrCell`, `nextCell`-`prevCell` and `findMatchingLoop`-`findMatchingOpen` to simplify their implementations? What implications would such changes have on the correctness of the program? Hopefully Brainfunc has provided some insight into threats to correctness and the power of Haskell in minimising the risk of software defects.
+Reflect on the code you have created. Consider its overall structure, and the correctness of each function. Consider how robust the design is to logical defects and assess the risk of defects being introduced during the maintenance phase. How could the code be reorganised to eliminate some of the risks to correctness? What alternative representations of `Zipper` exist, and what implications do they have? How could the exceptional cases be represented using types, and how would the code need to be changed to manage values of those types? When is the use of `error` justified? Also consider the patterns that repeat over and over in the code. Where can `do` notation be used to simplify Brainfunc? How can we exploit the symmetry of `nextCursor`-`prevCursor`, `incrCell`-`decrCell` and `nextCell`-`prevCell` to simplify their implementations? What implications would such changes have on the correctness of the program? Hopefully Brainfunc has provided some insight into threats to correctness and the power of Haskell in minimising the risk of software defects.
+
+_____________________________________________
+
+## Worked Examples
+
+### `Zipper` Functions
+
+#### `zipper`
+
+```
+zipper :: a -> Zipper a
+zipper x = Zipper [] x []
+```
+
+The implementation of `zipper` can be determined by considering the possible results of the function, which are determined by the data constructors of `Zipper`. If the function returned `Zip`, then the argument would be discarded. To return a value using the data constructor `Zipper` we must provide a value of type `a` to serve as the `Zipper`'s cursor.
+
+#### `zipperFromList`
+
+```
+zipperFromList :: [a] -> Zipper a
+zipperFromList (x:xs) = Zipper [] x xs
+zipperFromList []     = Zip
+```
+
+Just as `Zipper` can be considered to be `List` with 'two tails', `List` can be considered to be the cursor and 'right side' of `Zipper`. If the argument value is the base case of `List` then the result is the base case of `Zipper`.
+
+#### `getCursor`
+
+```
+getCursor :: Zipper a -> Maybe a
+getCursor (Zipper _ c _) = Just c
+getCursor Zip            = Nothing
+```
+
+Retrieving the cursor of a `Zipper` requires extracting the cursor element from the argument `Zipper` using pattern matching and returning it as a `Maybe` value using the `Just` data constructor. The result of the function must have type `Maybe a` to address the `Zip` case of `Zipper` in which no cursor exists.
+
+#### `setCursor`
+
+```
+setCursor :: a -> Zipper a -> Zipper a
+setCursor x (Zipper ls _ rs) = Zipper ls x rs
+setCursor x Zip              = Zipper [] x []
+```
+
+Setting the cursor element of a `Zipper` is achieved by obtaining the parts of the argument `Zipper` using pattern matching and substituting the cursor element when constructing the result `Zipper`. This implementation of `setCursor` sets the cursor if it does not exist, ensuring that the operation of setting a cursor will always succeed (e.g. calling `setCursor` doesn't result in a `Maybe` value that needs to be managed). This simplifies code that uses `setCursor` while also serving the needs of Brainfunc. Note that the behaviour of the `setCursor` in the `Zip` case is identical to the function `zipper`, thus the function could be implemented as:
+
+```
+setCursor :: a -> Zipper a -> Zipper a
+setCursor x (Zipper ls _ rs) = Zipper ls x rs
+setCursor x Zip              = zipper x
+```
+
+#### `next`
+
+```
+next :: Zipper a -> Maybe (Zipper a)
+next (Zipper ls c (r:rs)) = Just $ Zipper (c:ls) r rs
+next _                    = Nothing
+```
+
+Pattern matching on the structure of `Zipper` can provide the head of the `Zipper`'s right `List`, which can be made the new cursor element after consing the current cursor element to the head of the left `List`. This operation can fail if there are no elements in the `Zipper`'s right `List`, in which case there is no head to make the new cursor, or if the `Zipper` value is `Zip`, in which case there is no cursor to shift. Both cases are matched by `next _`.
+
+#### `prev`
+
+```
+prev :: Zipper a -> Maybe (Zipper a)
+prev (Zipper (l:ls) c rs) = Just $ Zipper ls l (c:rs)
+prev _                    = Nothing
+```
+
+The implementation of `prev` is similar to `next` except that the cursor shift occurs in the left direction.
+
+#### `insertNext`
+
+```
+insertNext :: a -> Zipper a -> Zipper a
+insertNext x (Zipper ls c rs) = Zipper (c:ls) x rs
+insertNext x Zip              = zipper x
+```
+
+The `insertNext` function replaces the cursor element but rather than 'overwrite' it, as in `setCursor`, it pushes it onto the `Zipper`'s right `List`, allowing the value to be later 'retrieved' by shifting the cursor one position left. Note that the resultant `Zipper` is shifted to the inserted value, which enables the `Zip` case to be elegantly handled (the caller is guaranteed to receive a `Zipper` with the inserted element as the cursor element).
+
+#### `insertPrev`
+
+```
+insertPrev :: a -> Zipper a -> Zipper a
+insertPrev x (Zipper ls c rs) = Zipper ls x (c:rs)
+insertPrev x Zip              = zipper x
+```
+
+The implementation of `insertPrev` is similar to `insertNext` except that the former cursor element is consed onto the `Zipper`'s right `List`.
+
+#### `nextCursor`
+
+```
+nextCursor :: Zipper a -> Maybe (a, Zipper a)
+nextCursor Zipper ls c (r:rs) = Just $ (r, Zipper (c:ls) r rs)
+nextCursor _                  = Nothing
+```
+
+The `nextCursor` function is a convenience function that combines shifting a `Zipper` and retrieving its cursor for cases in which both operations are required. This is only possible if the `Zipper`'s right `List` has a head element, which can be determined using pattern matching. The above implementation is arguably flawed because it does not make use of `next` and `getCursor` which implement the two operations on which it depends. The function can instead be written as:
+
+```
+nextCursor :: Zipper a -> Maybe (a, Zipper a)
+nextCursor z = case next z of
+    Just z' -> case getCursor z' of
+        Just x  -> Just (x, z')
+        Nothing -> Nothing
+    Nothing -> Nothing
+```
+
+This is verbose because the possible failure of both `next` and `getCursor` must be managed. However, `do` notation can be used to extract the result of both functions in the `Just` cases:
+
+```
+nextCursor :: Zipper a -> Maybe (a, Zipper a)
+nextCursor z = do
+    z' <- next z
+    c <- getCursor z'
+    pure (c, z')
+```
+
+If either `next` or `getCursor` return `Nothing`, `nextCursor` evaluates to `Nothing`, otherwise a `Tuple` of the shifted `Zipper` and its cursor are returned inside a `Just` value. This implementation is preferable to the original because it does not duplicate the functionality of `next` and `getCursor` and because it reduces the burden of correctness on `nextCursor` (`nextCursor` need only correctly implement the interaction between `next` and `getCursor`).
+
+#### `prevCursor`
+
+```
+prevCursor :: Zipper a -> Maybe (a, Zipper a)
+prevCursor z = do
+    z' <- prev z
+    c <- getCursor z'
+    pure $ (c, z')
+```
+
+The implementation of `prevCursor` is identical to `nextCursor` except that it makes use of `prev` in place of `next`. This symmetry can be exploited to create a higher-order function `shiftCursor` that abstracts over the behaviour of `prevCursor` and `nextCursor`. `shiftCursor` is identical to the two functions except that it takes as a parameter the function to use to shift the given `Zipper` value:
+
+```
+shiftCursor :: (Zipper a -> Maybe (Zipper a))
+            -> Zipper a
+            -> Maybe (a, Zipper a)
+shiftCursor f z = do
+    z' <- f z
+    c <- getCursor z'
+    pure (c, z')
+```
+
+This function enables `nextCursor` and `prevCursor` to be implemented as follows:
+
+```
+nextCursor :: Zipper a -> Maybe (a, Zipper a)
+nextCursor z = shiftCursor next z
+    -- or by eta reduction: nextCursor = shiftCursor next
+
+prevCursor :: Zipper a -> Maybe (a, Zipper a)
+prevCursor z = shiftCursor prev z
+    -- or by eta reduction: prevCursor = shiftCursor prev
+```
+
+This further reduces the burden of correctness on `nextCursor` and `prevCursor` because they only need to be proven to provide the correct `Zipper`-shifting function to `shiftCursor` (the burden of ensuring interactions between a shifting function and `getCursor` are correct is now concentrated in `shiftCursor` instead of being distributed across both `nextCursor` and `prevCursor`).
+
+### `Code` Functions
+
+#### `nextInstruction`
+
+```
+nextInstruction :: Zipper Instruction
+                -> Maybe (Instruction, Zipper Instruction)
+nextInstruction Zipper ls c (r:rs) = Just $ (r, Zipper (c:ls) r rs)
+nextInstruction _                  = Nothing
+```
+
+The case in which a `Zipper` has a 'next' element that can be made the cursor can be identified using pattern matching. However, the type of the above function is overspecialised: since its behaviour is not conditional on any values of the type `Instruction`, the type of the function is actually `Zipper a -> Maybe (a, Zipper a)`. This matches the type of `nextCursor`, which also has the same behaviour as `nextInstruction`. Therefore, `nextInstruction` can be implemented as follows:
+
+```
+nextInstruction :: Zipper Instruction
+                -> Maybe (Instruction, Zipper Instruction)
+nextInstruction = nextCursor
+```
+
+The motivation to redefine `nextCursor` specialised to `Instruction` is semantic: the type of `nextInstruction` makes it clear to readers of the code that the function is intended to manipulate `Code` values. Haskell's type polymorphism enables this to be expressed without requiring duplicate functionality.
+
+#### `prevInstruction`
+
+```
+prevInstruction :: Zipper Instruction
+                -> Maybe (Instruction, Zipper Instruction)
+prevInstruction = prevCursor
+```
+
+Similar to the `nextInstruction` function, `prevInstruction` is an alias of a more general `Zipper` shifting function, in this case `prevCursor`.
+
+#### `findMatchingLoop`
+
+An intuition for the implementation of `findMatchingLoop` can be developed by first considering how to iterate through a `Code` value and stop on a `Loop` instruction:
+
+```
+findMatchingLoop :: Code -> Maybe Code
+findMatchingLoop code = case nextInstruction code of
+    Just (nextIns, nextCode) -> case nextIns of
+        Loop -> Just nextCode             -- The Loop is found! Return the
+                                          -- Code in which the found value
+                                          -- is the cursor element
+        _    -> findMatchingLoop nextCode -- The Loop has not been found so
+                                          -- continue searching
+    Nothing                  -> Nothing   -- The end of the initial Code
+                                          -- has been reached without a
+                                          -- Loop having been found
+```
+
+The complexity of `findMatchingLoop` arises when an `Open` value is the next element in `Code`, meaning that the next `Loop` value will correspond to that nested loop, not the loop that corresponds to our initial loop. The key to solving this problem is to recognise that if `findLoop` can find the `Loop` that matches an `Open` for a singly-nested loop, then the nested application of `findLoop` can find the matching `Loop`s for `Open`s in nested loops:
+
+```
+findMatchingLoop :: Code -> Maybe Code
+findMatchingLoop code = case nextInstruction code of
+    Just (nextIns, nextCode) -> case nextIns of
+        Open -> case findMatchingLoop nextCode of
+            Just code' -> findMatchingLoop code' -- Search continues from the
+                                                 -- end of the inner loop
+            Nothing     -> Nothing               -- The end of the Code was
+                                                 -- reached without a Loop
+                                                 -- having been found
+        Loop -> Just code'
+        _    -> findMatchingLoop code'
+    Nothing            -> Nothing
+```
+
+Unfortunately, the implementation of `findMatchingLoop` can be called from outside of a loop - i.e. the cursor element of the `Code` value may not be `Open` - but still evaluate to a `Just Code` (e.g. `findMatchingLoop (Zipper [] Incr [Loop]) == Just (Zipper [Incr] Loop [])`). If the cursor element of the given `Code` is not `Open` then the result of the function can be immediately determined to be `Nothing`:
+
+```
+findMatchingLoop :: Code -> Maybe Code
+findMatchingLoop code = case getCursor code of
+    Just Open -> findMatchingLoop' code -- If the cursor element is Open then
+                                        -- search for the matching Loop
+    _         -> Nothing                -- If the cursor element is not Open
+                                        -- then there is no matching Loop
+    where
+        findMatchingLoop' code = case nextInstruction code of
+            Just (nextIns, nextCode) -> case nextIns of
+                Open -> case findMatchingLoop' nextCode of
+                    Just code'' -> findMatchingLoop' code''
+                    Nothing     -> Nothing
+                Loop -> Just nextCode
+                _    -> findMatchingLoop' nextCode
+```
+
+With `do` notation, the excessive `case` expressions can be avoided:
+
+```
+findMatchingLoop :: Code -> Maybe Code
+findMatchingLoop code = case getCursor code of
+    Just Open -> findMatchingLoop' code
+    _         -> Nothing
+    where
+        findMatchingLoop' code = do
+            (nextIns, nextCode) <- nextInstruction code
+            case nextIns of
+                Open -> do
+                    loopedCode <- findMatchingLoop' nextCode
+                    findMatchingLoop' loopedCode
+                Loop -> Just nextCode
+                _    -> findMatchingLoop' nextCode
+```
+
+#### `findMatchingOpen`
+
+```
+findMatchingOpen :: Code -> Maybe Code
+findMatchingOpen code = case getCursor code of
+    Just Loop -> findMatchingOpen' code
+    _         -> Nothing
+    where
+        findMatchingOpen' code = do
+            (prevIns, prevCode) <- prevInstruction code
+            case prevIns of
+                Loop -> do
+                    loopedCode <- findMatchingOpen' prevCode
+                    findMatchingOpen' loopedCode
+                Open -> Just prevCode
+                _    -> findMatchingOpen' prevCode
+```
+
+The implementation of `findMatchingOpen` mirrors `findMatchingLoop`, switching the `Loop` and `Open` cases and using `prevInstruction` instead of `nextInstruction`.
+
+### `Tape` Functions
+
+#### `incrCell`
+
+```
+incrCell :: Tape -> Tape
+incrCell (Zipper ls c rs) = Zipper ls (c + 1) rs
+incrCell Zip              = zipper 1
+```
+
+To implement `incrCell` we can pattern match on `Zipper` to extract the cursor value that is to be incremented since we know that `Tape` is a `Zipper Integer`. Due to the (simulated) infinite nature of `Tape`, in the case that a `Tape` with no cells is encountered we can simply 'create' the cell by returning a `Zipper` in which the cursor element is 1 (an increment of the default cell value of zero). However, the above implementation of `incrCell` is brittle and depends heavily on the structure of `Zipper`. To increment a cell we need to read the cell's value and then write the increment of that value back to the cell, and the functions `readCell` and `wrteCell` exist for this purpose. Therefore, `incrCell` can be implemented as follows:
+
+```
+incrCell :: Tape -> Tape
+incrCell z = wrteCell (readCell z + 1) z
+```
+
+This implementation enables `readCell` and `wrteCell` to handle `Zipper`'s base case and isolates `incrCell` from the underlying structure of `Tape`.
+
+#### `decrCell`
+
+```
+decrCell :: Tape -> Tape
+decrCell z = wrteCell (readCell z - 1) z
+```
+
+The implementation of `decrCell` mirrors the implementation of `incrCell` and the existence of `readCell` and `wrteCell` allows `decrCell` to be simplified in the same way. We can exploit this symmetry between `incrCell` and `decrCell` to create a higher-order function `applyCell` and define both `incrCell` and `decrCell` in terms of that function:
+
+```
+applyCell :: (Integer -> Integer) -> Tape -> Tape
+applyCell f z = wrteCell (f $ readCell z) z
+
+incrCell :: Tape -> Tape
+incrCell z = applyCell (+1) z
+    -- or by eta reduction: incrCell = applyCell (+1)
+
+decrCell :: Tape -> Tape
+decrCell z = applyCell (subtract 1) z
+    -- or by eta reduction: decrCell = applyCell (subtract 1)
+```
+
+#### `nextCell`
+
+```
+nextCell :: Tape -> Tape
+nextCell z = case next z of
+    Just z' -> z'
+    Nothing -> insertNext 0 z
+```
+
+Since `Tape` is actually a `Zipper Integer`, the `next` function can be used to shift a given `Tape` to the next cell. Since the `Tape` is simulated to be infinite, the failure case of `next` can be handled by simply inserting a new cell into the `Tape`, as performed by `insertNext`.
+
+#### `prevCell`
+
+```
+prevCell :: Tape -> Tape
+prevCell z = case prev z of
+    Just z' -> z'
+    Nothing -> insertPrev 0 z
+```
+
+As in other `next`-`prev` function pairs, `prevCell` mirrors the implementation of `nextCell` except that `prev` is used in place of `next`. Both functions can be simplified using a higher-order function `fromMaybe` to handle the result of `next`/`prev`, returning the value inside the `Maybe` result if one exists or else returning a default:
+
+```
+fromMaybe :: a -> Maybe a -> a
+fromMaybe _ (Just x) = x
+fromMaybe x Nothing  = x
+
+nextCell :: Tape -> Tape
+nextCell z = fromMaybe (insertNext 0 z) (next z)
+
+prevCell :: Tape -> Tape
+prevCell z = fromMaybe (insertPrev 0 z) (prev z)
+```
+
+#### `readCell`
+
+```
+readCell :: Tape -> Integer
+readCell z = case getCursor z of
+    Just c -> c
+    Nothing -> 0
+```
+
+Recall that we consider our interpreter's tape to contain an infinite number of cells and that each cell initially contains the value zero. A `Tape` value of `Zip` represents an infinite tape that we have not actually constructed; as can be seen in `nextCell` and `prevCell`, we expand the `Tape` as required. Therefore `Zip` corresponds to our infinite, unmodified conceptual tape, in which we know the current cell must contain zero, which we return in the `Nothing` case. The structure of `readCell` is similar to `nextCell` and `prevCell`, and we can simplify it using `fromMaybe` in the same way:
+
+```
+readCell :: Tape -> Integer
+readCell z = fromMaybe 0 $ getCursor z
+```
+
+This implementation can be simplified further by recognising that `getCursor` has type `Zipper a -> Maybe a` and `fromMaybe 0` has type `Maybe a -> a` - the functions can be composed together to create a function of type `Zipper a -> a`:
+
+```
+-- The compose function (present in the base module)
+(.) :: (b -> c) -> (a -> b) -> (a -> c)
+(.) f g = \x -> f (g x)
+
+readCell :: Tape -> Integer
+readCell = fromMaybe 0 . getCursor
+```
+
+#### `wrteCell`
+
+```
+wrteCell :: Integer -> Tape -> Tape
+wrteCell = setCursor
+```
+
+The behaviour of `wrteCell` is identical to `setCursor`, it is simply specialised to the type of `Tape`.
+
+### P'' Functions
+
+#### `executeIncr`
+
+```
+executeIncr :: (Code, Tape) -> (Code, Tape)
+executeIncr (code, tape) = (code, incrCell tape)
+```
+
+The `executeIncr` function implements Brainfuck's `+` instruction, incrementing the value in the tape's current cell but leaving the code unchanged. The reason for using a `Tuple` parameter is to indicate the intractable state of the `Code` and `Tape` values on which the function acts. This pattern is used for each of the '`execute<Instruction>`' functions.
+
+#### `executeDecr`
+
+```
+executeDecr :: (Code, Tape) -> (Code, Tape)
+executeDecr (code, tape) = (code, decrCell tape)
+```
+
+The `executeDecr` function implements Brainfuck's `-`, deferring to the `decrCell` function to decrement the given `Tape`'s cursor value but leaving the given `Code` unchanged.
+
+#### `executeNext`
+
+```
+executeNext :: (Code, Tape) -> (Code, Tape)
+executeNext (code, tape) = (code, nextCell tape)
+```
+
+The `executeNext` function implements Brainfuck's `>` instruction by using `nextCell` to modify the given `Tape`. The `>` instruction does not modify the sequence of instructions in a Brainfuck program, thus the `Code` value is returned unchanged.
+
+#### `executePrev`
+
+```
+executePrev :: (Code, Tape) -> (Code, Tape)
+executePrev (code, tape) = (code, prevCell tape)
+```
+
+The `executePrev` function mirrors `executeNext` except that it uses `prevCell` instead of `nextCell` to apply the action of Brainfuck's `<` instruction to the given `Tape`.
+
+#### `executeOpen`
+
+```
+executeOpen :: (Code, Tape) -> (Code, Tape)
+executeOpen (code, tape) = case readCell tape of
+    0 -> case findMatchingLoop code of
+        Just code' -> (code', tape)
+        Nothing    -> error "Error: No matching ']' instruction"
+    _ -> (code, tape)
+```
+
+The `executeOpen` function implements Brainfuck's `[` instruction, and therefore must determine whether the instructions in the loop that `[` opens should be skipped or executed. This check is performed using a `case` statement. If `executeOpen` evaluates `findMatchingLoop` and receives a result of `Nothing`, then the Brainfuck program provided to the interpreter is erroneous and Brainfunc terminates with an explanatory message.
+
+#### `executeLoop`
+
+```
+executeLoop :: (Code, Tape) -> (Code, Tape)
+executeLoop (code, tape) = case readCell tape of
+    0 -> (code, tape)
+    _ -> case findMatchingOpen code of
+        Just code' -> (code', tape)
+        Nothing    -> error "Error: No matching '[' instruction"
+```
+
+The `executeLoop` function implements Brainfuck's `]` instruction and thus mirrors `executeOpen`, facilitating repeating instructions instead of skipping them.
+
+#### `executeInstruction`
+
+```
+executeInstruction :: Instruction -> (Code, Tape) -> (Code, Tape)
+executeInstruction Incr = executeIncr
+executeInstruction Decr = executeDecr
+executeInstruction Next = executeNext
+executeInstruction Prev = executePrev
+executeInstruction Open = executeOpen
+executeInstruction Loop = executeLoop
+executeInstruction _    = error "Error: Instruction not supported!"
+```
+
+The `executeInstruction` function determines which `execute<Instruction>` function to apply to a `Code` and `Tape` according to the given `Instruction` using pattern matching. Each case is eta reduced for simplicity. For reasons explained in the following section, the `executeInstruction` function cannot process Brainfuck's IO instructions. This is indicated to users by the error case.
+
+#### `executeCode`
+
+The `executeCode` function's only task is to iterate through the given `Code` and execute its `Instruction`s on the given `Tape`. An intuition for how to design `executeCode` can be developed by considering the iteration condition (assume an `Instruction` to process exists):
+
+```
+executeCode' :: Instruction -> (Code, Tape) -> Tape
+executeCode' ins state = case nextInstruction updatedCode of
+    Just (nextIns, nextCode) -> executeCode' nextIns (nextCode, updatedTape)
+    Nothing                  -> updatedTape
+    where
+        (updatedCode, updatedTape) = executeInstruction ins state
+```
+
+Execution of the 'current' `Instruction` occurs in the `where` clause, where the next state of `Code` and `Tape` is evaluated using `executeInstruction`. The condition for continuing to iterate is whether there exists a next `Instruction` to execute, which is determined by pattern matching on the result of applying `nextInstruction` to the updated `Code` value. The only special case of `executeCode` is when the provided `code` is `Zip`. This can be handled by pattern matching on the result of `getCursor`:
+
+```
+executeCode :: Code -> Tape -> Tape
+executeCode code tape = case getCursor code of
+    Just ins -> executeCode' ins (code, tape)
+        where
+            executeCode' :: Instruction -> (Code, Tape) -> Tape
+            executeCode' ins state = case nextInstruction updatedCode of
+                Just (nextIns, nextCode) -> executeCode'
+                    nextIns (nextCode, updatedTape)
+                Nothing                  -> updatedTape
+                where
+                    (updatedCode, updatedTape) = executeInstruction ins state
+    Nothing  -> tape
+```
+
+### Brainfuck Functions
+
+#### `executeRead`
+
+```
+executeRead :: (Code, Tape) -> IO (Code, Tape)
+executeRead (code, tape) = do
+    putStrLn (show $ readCell tape)
+    pure (code, tape)
+```
+
+The `executeRead` function implements the IO aspect of the `readCell` function, printing the value read from the given `Tape` to the terminal. After reading from the `Tape` value, the function puts the unmodified `Code` and `Tape` values into the `IO` context using `pure`. The values are placed into the `IO` context even though they are unchanged to indicate to calling functions that the result of `executeRead` is intractable from whatever IO side-effects it may have performed. Similar to `readCell`, `executeRead` can be simplified by recognising that `show` has type `a -> String` and `putStrLn` has type `String -> IO ()`, thus `(.)` can compose them into a single function:
+
+```
+executeRead :: (Code, Tape) -> IO (Code, Tape)
+executeRead (code, tape) = do
+    putStrLn . show $ readCell tape
+    pure (code, tape)
+```
+
+#### `executeWrte`
+
+```
+executeWrte :: (Code, Tape) -> IO (Code, Tape)
+executeWrte (code, tape) = do
+    x <- getLine
+    case readMaybe x :: Maybe Integer of
+        Just x' -> pure (code, wrteCell x' tape)
+        Nothing -> error "Error: expected integer"
+```
+
+Similar to `executeRead` and `readCell`, the `executeWrte` function implements the IO aspect of the `wrteCell` function. The above implementation errors if the user provides non-integer input. The interpreter can be made more user-friendly by printing an instruction to the user in the `Nothing` case and then prompting for input again:
+
+```
+executeWrte :: (Code, Tape) -> IO (Code, Tape)
+executeWrte (code, tape) = do
+    x <- getLine
+    case readMaybe x :: Maybe Integer of
+        Just x' -> pure (code, wrteCell x' tape)
+        Nothing -> do
+            putStrLn "Expected integer value"
+            executeWrte (code, tape)
+```
+
+#### `executeInstructionIO`
+
+```
+executeInstructionIO :: Instruction -> (Code, Tape) -> IO (Code, Tape)
+executeInstructionIO Incr = pure . executeIncr
+executeInstructionIO Decr = pure . executeDecr
+executeInstructionIO Next = pure . executeNext
+executeInstructionIO Prev = pure . executePrev
+executeInstructionIO Open = pure . executeOpen
+executeInstructionIO Loop = pure . executeLoop
+executeInstructionIO Read = executeRead
+executeInstructionIO Wrte = executeWrte
+```
+
+The implementation of `executeInstructionIO` is similar to `executeInstruction` except that its result involves `IO`, which enables it to support the `Read` and `Wrte` instructions. To support the non-IO `Instruction` values, `executeInstructionIO` must place their results into the `IO` context, which it does using `pure`. The `(.)` function is used to simplify these cases by exploiting the types of `pure` (specialised to `(Code, Tape) -> IO (Code, Tape)` in this case) and the `execute<non-IO Instruction>` functions (each has type `(Code, Tape) -> (Code, Tape)`). Without `(.)`, the first six cases of `executeInstructionIO` would have the form `executeInstructionIO <Instruction> (code, tape) = pure $ execute<Instruction> (code, tape)`.
+
+#### `executeCodeIO`
+
+```
+executeCodeIO :: Code -> Tape -> IO ()
+executeCodeIO code tape = case getCursor code of
+    Just ins -> executeCodeIO' ins (code, tape)
+        where
+            executeCodeIO' :: Instruction -> (Code, Tape) -> IO ()
+            executeCodeIO' ins state = do
+                (updatedCode, updatedTape) <- executeInstructionIO ins state
+                case nextInstruction updatedCode of
+                    Just (nextIns, nextCode) -> executeCodeIO'
+                        nextIns (nextCode, updatedTape)
+                    Nothing                  -> pure ()
+    Nothing  -> pure ()
+```
+
+The implementation of `executeCodeIO` is very similar to `executeCode` except that it must manage the `IO` context introduced by `executeInstructionIO`. This is performed by using `do` notation in the `executeCodeIO'` inner function. Note that `executeCodeIO` returns a value of type `IO ()` rather than `Tape`, indicating that it performs the side-effects of a Brainfuck program and discards the `Code` and `Tape` when the program is completed.
+
+### Completion Functions
+
+#### `charToInstruction`
+
+```
+charToInstruction :: Char -> Maybe Instruction
+charToInstruction '+' = Just Incr
+charToInstruction '-' = Just Decr
+charToInstruction '>' = Just Next
+charToInstruction '<' = Just Prev
+charToInstruction '[' = Just Open
+charToInstruction ']' = Just Loop
+charToInstruction '.' = Just Read
+charToInstruction ',' = Just Wrte
+charToInstruction _   = Nothing
+```
+
+In Brainfuck, a character that does not correspond to `+`, `-`, `>`, `<`, `[`, `]`, `.` or `,` is considered to be part of a comment and ignored. This case is represented by `Maybe`'s `Nothing` value. If a character corresponds to a Brainfuck instruction, then the corresponding Brainfunc `Instruction` is returned in a `Just` value.
+
+#### `stringToCode`
+
+```
+stringToCode :: String -> [Instruction]
+stringToCode []     = []
+stringToCode (x:xs) = case charToInstruction x of
+    Just x' -> x' : stringToCode xs
+    Nothing -> stringToCode xs
+```
+
+With `charToInstruction`, Brainfuck source code can be converted into a `List` of `Instruction`s by executing `charToInstruction` on each character and retaining only the contents of the `Just` values. Note that, other than `charToInstruction`, no part of `stringToCode` is specific to either `Char` or `Instruction`. The more general `mapMaybe` function can be created to handle all instances of modifying a `List` using a function that returns a `Maybe` result, and `stringToCode` can be defined as a specialisation of that function:
+
+```
+mapMaybe :: (a -> Maybe b) -> [a] -> [b]
+mapMaybe f (x:xs) = case f x of
+    Just x' -> x' : mapMaybe f xs
+    Nothing -> mapMaybe f xs
+mapMaybe _ []     = []
+
+stringToCode :: String -> [Instruction]
+stringToCode = mapMaybe charToInstruction
+```
+
+#### `process`
+
+```
+process :: String -> IO ()
+process source = executeCodeIO code Zip
+    where code = zipperFromList $ stringToCode source
+```
+
+The `process` function simply converts the `String` it receives to a `Code`, which can be performed using `zipperFromList` and `stringToCode`, and passes that `Code` and an empty `Tape` to `executeCodeIO`. The empty `Tape` is expanded by Brainfunc as required by the Brainfuck program (by the `nextCell` and `prevCell` functions).
+
+#### `main`
+
+```
+main :: IO ()
+main = do
+    putStrLn "Enter Brainfuck code:"
+    input <- getLine
+    process input
+```
+
+The `main` function need only print a message to the user about the input it expects, obtain that input, then pass it to the `process` function.
