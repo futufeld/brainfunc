@@ -1479,4 +1479,4 @@ The `main` function need only print a message to the user about the input it exp
 
 ## Reference Implementation
 
-A reference implementation of Brainfunc can be found [in this repository](./brainfunk.hs).
+A reference implementation of Brainfunc can be found [in this repository](./brainfunc.hs).
