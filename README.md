@@ -1476,3 +1476,7 @@ main = do
 ```
 
 The `main` function need only print a message to the user about the input it expects, obtain that input, then pass it to the `process` function.
+
+## Reference Implementation
+
+A reference implementation of Brainfunc can be found [in this repository](./brainfunk.hs).
