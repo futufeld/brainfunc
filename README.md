@@ -662,7 +662,7 @@ main = do
                                   --    String and evaluates to IO ()
 ```
 
-V value that lies outside of the context of the `do` block can be placed inside the context by applying the `pure` function to it. The appropriate context is determined from the usage of the expression in which `pure` appears. For example:
+To print values that are not of type `String`, the `show` function (type: `a -> String`) can be used. A value that lies outside of the context of the `do` block can be placed inside the context by applying the `pure` function to it. The appropriate context is determined from the usage of the expression in which `pure` appears. For example:
 
 ```
 main :: IO ()
@@ -690,20 +690,22 @@ The function `getLine` returns a `String`, but for the purposes of our Brainfuck
 readMaybe :: (Read a) => String -> Maybe a
 ```
 
-This type indicates that `readMaybe` takes a `String` and returns a `Just a` if a value of type `a` could be read from the `String`, oftherwise it returns `Nothing`. Although it is not relevant to Brainfunc, know that the type constraint `(Read a) => ...` states that `readMaybe` is only defined for values of type `a` that implement the `Read` typeclass (on which `readMaybe` depends for 'reading' values). The type of `a` can normally be determined by the context in which the result of `readMaybe` is used. For example, the following use of `readMaybe` means that the type `a` is unambiguously `Int`:
+This type indicates that `readMaybe` takes a `String` and returns a `Just a` if a value of type `a` could be read from the `String`, oftherwise it returns `Nothing`. Although it is not relevant to Brainfunc, know that the type constraint `(Read a) => ...` states that `readMaybe` is only defined for values of type `a` that implement the `Read` typeclass (on which `readMaybe` depends for 'reading' values), which `Integer` implements. The type of `a` can normally be determined by the context in which the result of `readMaybe` is used, but the type can be made unambiguous by adding a type hint after the call to `readMaybe`. In the following example, the result of `readMaybe` is unambiguously `Int`:
 
 ```
+import Text.Read (readMaybe)
+
 main = do
     putStrLn "Enter number of worlds to greet:"
     numWorlds <- getLine
-    case readMaybe numWorlds of
+    case readMaybe numWorlds :: Maybe Int of
         Just 0  -> putStrLn "Goodbye"
         Just 1  -> putStrLn "Hello, world!"
         Just _  -> putStrLn "Hello, worlds!"
         Nothing -> putStrLn "Expected integer"
 ```
 
-Use `readMaybe` to ensure that the input provided by a user when executing the `Wrte` instruction is in the expected format.
+Note that `readMaybe` must be imported from the `Text.Read` standard library module. Use `readMaybe` to ensure that the input provided by a user when executing the `Wrte` instruction is in the expected format.
 
 #### Required Functions
 
