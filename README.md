@@ -318,9 +318,10 @@ This makes `Code` an alias of `Zipper Instruction`, increasing the readability o
 
 #### Required Functions
 
-After each `Instruction` is processed, the program's sequence of instructions, `Code`, has to be shifted one position to the right. However, the `Open` and `Loop` instructions may require the instruction sequence to be shifted to the corresponding instruction, shifting from `Open` to `Loop` or `Loop` to `Open` depending on whether the loop is to be entered or repeated, respectively. Therefore we require three functions to process values of the `Code` type:
+After each `Instruction` is processed, the program's sequence of instructions, `Code`, has to be shifted one position to the right. However, the `Open` and `Loop` instructions may require the instruction sequence to be shifted to the corresponding instruction, shifting from `Open` to `Loop` or `Loop` to `Open` depending on whether the loop is to be entered or repeated, respectively. This can require `Code` to be shifted in the left direction. The following functions enable the manipulations of `Code` values required by Brainfunc:
 
 * `nextInstruction`: Allows us to shift to the next Brainfuck instruction.
+* `prevInstruction`: Allows us to shift to the previous Brainfuck instruction.
 * `findMatchingLoop`: Allows us to skip the instructions within a loop.
 * `findMatchingOpen`: Allows us to repeat the instructions within a loop.
 
@@ -334,6 +335,19 @@ nextInstruction (Zipper [Incr,Next] Incr [Prev])
 nextInstruction (Zipper [Incr,Incr,Next] Prev [])
     == Nothing
 nextInstruction Zip
+    == Nothing
+```
+
+#### `prevInstruction`
+
+Implement the `prevInstruction` function, which returns a cursor of the given `Code` shifted one element to the left paired with the shifted `Code`, if shifting is possible. Examples:
+
+```
+prevInstruction (Zipper [Incr,Next] Incr [Prev])
+    == Just (Prev, Zipper [Next] Incr [Incr,Prev])
+prevInstruction (Zipper [] Next [Incr,Incr,Prev])
+    == Nothing
+prevInstruction Zip
     == Nothing
 ```
 
